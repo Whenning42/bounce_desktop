@@ -7,7 +7,9 @@
 class WaylandBackend : public Backend {
  public:
   // Starts a Weston vnc backed server.
-  static StatusOr<std::unique_ptr<WaylandBackend>> start_server(int32_t port);
+  static StatusOr<std::unique_ptr<WaylandBackend>> start_server(int32_t port,
+                                                                int32_t width,
+                                                                int32_t height);
   ~WaylandBackend() override { subprocess_destroy(&server_process_); }
 
  private:

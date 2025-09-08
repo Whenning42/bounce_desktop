@@ -10,7 +10,6 @@ vncclient_dep = dependency('libvncclient')
 
 bouncedesk_sources = [
   'client.cpp',
-  'client_loop.cpp',
   'wayland_backend.cpp'
 ]
 

@@ -24,10 +24,9 @@
 #include <ctime>
 #include <mutex>
 
-inline const char* kLogLayer = "LAYER";
-inline const char* kLogSync = "SYNC";
 inline const char* kLogError = "ERROR";
 inline const char* kLogSubprocess = "SUBPROCESS";
+inline const char* kLogVnc = "VNC";
 
 namespace logger {
 
