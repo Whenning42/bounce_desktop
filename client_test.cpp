@@ -8,7 +8,7 @@
 const int32_t kPort = 5930;
 
 TEST(Client, GetPixelsReturnsAFrame) {
-  auto backend = WaylandBackend::start_server(kPort, 300, 200);
+  auto backend = WaylandBackend::start_server(kPort, 300, 200, "sleep 1000");
   sleep(1);
   auto client_result =
       BounceDeskClient::connect(kPort, ConnectionOptions{.port = kPort});

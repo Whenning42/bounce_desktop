@@ -1,6 +1,7 @@
 #ifndef WAYLAND_BACKEND_H_
 #define WAYLAND_BACKEND_H_
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -15,23 +16,17 @@ class WaylandBackend : public Backend {
   // server on the same port.
 
   // Starts a Weston vnc backed server.
-  static StatusOr<std::unique_ptr<WaylandBackend>> start_server(int32_t port,
-                                                                int32_t width,
-                                                                int32_t height);
-  ~WaylandBackend() override { subprocess_terminate(&server_process_); }
-
-  const std::string& get_x_display() { return x_display_; }
-  const std::string& get_wayland_display() { return wayland_display_; };
+  static StatusOr<std::unique_ptr<WaylandBackend>> start_server(
+      int32_t port, int32_t width, int32_t height, const std::string& command);
+  ~WaylandBackend() override {
+    printf("Requesting cleanup\n");
+    cleanup_();
+  }
 
  private:
-  WaylandBackend(subprocess_s& server_process, const std::string& x_display,
-                 const std::string& wayland_display)
-      : server_process_(server_process),
-        x_display_(x_display),
-        wayland_display_(wayland_display) {}
-  subprocess_s server_process_;
-  std::string x_display_;
-  std::string wayland_display_;
+  WaylandBackend(std::function<void()> cleanup) : cleanup_(cleanup) {}
+
+  std::function<void()> cleanup_;
 };
 
 #endif

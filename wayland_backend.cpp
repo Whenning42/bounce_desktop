@@ -9,33 +9,13 @@
 #include <thread>
 #include <utility>
 
+#include "process_manager.h"
 #include "third_party/status/status_or.h"
 #include "third_party/subprocess/subprocess.h"
 
-namespace {
-bool read_display_file_with_timeout(const char* filepath, std::string* x_display,
-                                     std::string* wayland_display,
-                                     std::chrono::seconds timeout) {
-  const auto start_time = std::chrono::steady_clock::now();
-  while (std::chrono::steady_clock::now() - start_time < timeout) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    std::ifstream infile(filepath);
-    if (!infile.is_open() || !(infile >> *x_display >> *wayland_display)) {
-      continue;
-    }
-    if (x_display->empty() || wayland_display->empty()) {
-      continue;
-    }
-    return true;
-  }
-  return false;
-}
-}  // namespace
-
 StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
-    int32_t port, int32_t width, int32_t height) {
+    int32_t port, int32_t width, int32_t height, const std::string& command) {
   // TODO: Vendor weston auth changes.
-  // TODO: Add subchild reaping.
   // TODO: Better manage child stderr/stdout.
 
   char tempfile[] = "/tmp/display_log_XXXXXX";
@@ -46,12 +26,15 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
   }
   close(file);
 
+  const std::string exit_file = std::format("/tmp/exit_vnc_{}", port);
   setenv("LD_LIBRARY_PATH", "/usr/local/lib", true);
   setenv("LOG_DISPLAYS_PATH", tempfile, true);
+  setenv(kProcessManagerExitEnv, exit_file.c_str(), true);
   const std::string port_str = std::format("--port={}", port);
   const std::string width_str = std::format("--width={}", width);
   const std::string height_str = std::format("--height={}", height);
-  const char* command_line[] = {"weston",
+  const char* command_line[] = {"build/process_manager",
+                                "weston",
                                 "--xwayland",
                                 "--backend=vnc",
                                 "--disable-transport-layer-security",
@@ -59,25 +42,17 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
                                 width_str.c_str(),
                                 height_str.c_str(),
                                 "--",
-                                "./log_displays.sh",
+                                command.c_str(),
                                 nullptr};
-  subprocess_s server_process;
-  int result = subprocess_create(command_line,
-                                 subprocess_option_inherit_environment |
-                                     subprocess_option_enable_async |
-                                     subprocess_option_search_user_path,
-                                 &server_process);
-  if (0 != result) {
-    return StatusVal(StatusCode::INTERNAL);
-  }
 
-  std::string x_display;
-  std::string wayland_display;
-  if (!read_display_file_with_timeout(tempfile, &x_display, &wayland_display,
-                                      std::chrono::seconds(3))) {
-    return StatusVal(StatusCode::INTERNAL);
-  }
+  int pid;
+  posix_spawnp(&pid, command_line[0], nullptr, nullptr, (char**)command_line,
+               environ);
 
-  return std::unique_ptr<WaylandBackend>(
-      new WaylandBackend(server_process, x_display, wayland_display));
+  auto cleanup = [exit_file]() {
+    system(("touch " + exit_file).c_str());
+    sleep(1);
+  };
+
+  return std::unique_ptr<WaylandBackend>(new WaylandBackend(cleanup));
 }
