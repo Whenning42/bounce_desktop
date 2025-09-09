@@ -26,4 +26,13 @@ client_test = executable('client_test',
   include_directories : ['third_party']
 )
 
-test('client_test', client_test)
+wayland_backend_test = executable('wayland_backend_test',
+  'wayland_backend_test.cpp',
+  link_with : bouncedesk_lib,
+  dependencies : [gtest_dep],
+  include_directories : ['third_party']
+)
+
+test('client_test', client_test, is_parallel : false,  workdir : meson.source_root())
+test('wayland_backend_test', wayland_backend_test, is_parallel : false,  workdir : meson.source_root())
+
