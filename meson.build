@@ -11,7 +11,7 @@ vncclient_dep = dependency('libvncclient')
 bouncedesk_sources = [
   'client.cpp',
   'wayland_backend.cpp',
-  'process_manager.cpp'
+  'reaper/reaper.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
@@ -27,11 +27,23 @@ client_test = executable('client_test',
   include_directories : ['third_party']
 )
 
-process_manager = executable('process_manager',
-  'process_manager_main.cpp',
+reaper_sources = [
+  'reaper/reaper.cpp',
+  'reaper/impl.cpp'
+]
+
+reaper = executable('reaper',
+  ['reaper/impl_main.cpp'] + reaper_sources,
+  include_directories : ['third_party']
+)
+
+reaper_test = executable('reaper_test',
+  'reaper/reaper_test.cpp',
   link_with : bouncedesk_lib,
+  dependencies : [gtest_dep],
   include_directories : ['third_party']
 )
 
 test('client_test', client_test, is_parallel : false,  workdir : meson.source_root())
+test('reaper_test', reaper_test, is_parallel : false, workdir : meson.source_root())
 

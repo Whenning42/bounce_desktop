@@ -31,6 +31,8 @@
 enum class StatusCode {
   OK = 0,
   UNKNOWN = 2,
+  INVALID_ARGUMENT = 3,
+  DEADLINE_EXCEEDED = 4,
   NOT_FOUND = 5,
   // We use INTERNAL errors for cases where we catch a C api error, but don't
   // parse its errno into a specific error type.
@@ -45,9 +47,40 @@ class StatusVal {
   bool ok() const { return code_ == StatusCode::OK; }
   StatusCode code() const { return code_; }
 
+  // Returns this. Exposed to enable RETURN_IF_ERROR(status_val) to work.
+  StatusVal status() { return *this; }
+
+  std::string to_string() const {
+    switch (code()) {
+      case StatusCode::OK:
+        return "OK";
+      case StatusCode::UNKNOWN:
+        return "UNKNOWN";
+      case StatusCode::INVALID_ARGUMENT:
+        return "INVALID_ARGUMENT";
+      case StatusCode::DEADLINE_EXCEEDED:
+        return "DEADLINE_EXCEEDED";
+      case StatusCode::NOT_FOUND:
+        return "NOT_FOUND";
+      case StatusCode::INTERNAL:
+        return "INTERNAL";
+      case StatusCode::UNAVAILABLE:
+        return "UNAVAILABLE";
+    }
+    return "UNKNOWN_STATUS_CODE";
+  }
+
  private:
   StatusCode code_ = StatusCode::OK;
 };
+
+inline StatusVal OkStatus() { return StatusVal(StatusCode::OK); }
+inline StatusVal UnknownError() { return StatusVal(StatusCode::UNKNOWN); }
+inline StatusVal InvalidArgumentError() { return StatusVal(StatusCode::INVALID_ARGUMENT); }
+inline StatusVal DeadlineExceededError() { return StatusVal(StatusCode::DEADLINE_EXCEEDED); }
+inline StatusVal NotFoundError() { return StatusVal(StatusCode::NOT_FOUND); }
+inline StatusVal InternalError() { return StatusVal(StatusCode::INTERNAL); }
+inline StatusVal UnavailableError() { return StatusVal(StatusCode::UNAVAILABLE); }
 
 template <typename T>
 class StatusOr {
@@ -64,6 +97,9 @@ class StatusOr {
   // Construct StatusOr with a StatusVal.
   StatusOr(const StatusVal& status) : status_(status) {}
   StatusOr(StatusVal&& status) : status_(std::move(status)) {}
+
+  // Construct StatusOr with a StatusCode.
+  explicit StatusOr(StatusCode code) : status_(StatusVal(code)) {}
 
   StatusOr(const StatusOr& other) : status_(other.status_) {
     if (other.has_value()) {
@@ -116,7 +152,7 @@ class StatusOr {
   T& value() { return value_; }
   const T& value() const { return value_; }
 
-  // Dereference results are undefined if this StatusOr doesn't hold a value.
+  // Dereference results are undefined if this StatusOr doesn't hold a va/lue.
   T& operator*() { return value_; }
   const T& operator*() const { return value_; }
   T* operator->() { return &value_; }
@@ -125,7 +161,8 @@ class StatusOr {
   // Returns value if present, otherwise ERROR() logs and exit(1)
   T& value_or_die() {
     if (!has_value()) {
-      ERROR("value_or_die() called on error status");
+      std::string status_str = status().to_string();
+      ERROR("value_or_die() called on error status: %s", status_str.c_str());
       exit(1);
     }
     return value_;
@@ -147,5 +184,11 @@ class StatusOr {
       return status_or.status(); \
     }                            \
   } while (0)
+
+
+#define ASSIGN_OR_RETURN(lhs, rhs) \
+  auto v = rhs;                    \
+  if (!v.ok()) return v.status();  \
+  lhs = *v;
 
 #endif  // STATUS_OR_H_
