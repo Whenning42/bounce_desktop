@@ -6,6 +6,7 @@
 #include <string>
 
 #include "backend.h"
+#include "reaper/reaper.h"
 #include "third_party/status/status_or.h"
 #include "third_party/subprocess/subprocess.h"
 
@@ -20,13 +21,15 @@ class WaylandBackend : public Backend {
       int32_t port, int32_t width, int32_t height, const std::string& command);
   ~WaylandBackend() override {
     printf("Requesting cleanup\n");
-    cleanup_();
+    if (reaper_) {
+      reaper_->clean_up();
+    }
   }
 
  private:
-  WaylandBackend(std::function<void()> cleanup) : cleanup_(cleanup) {}
+  WaylandBackend(std::shared_ptr<reaper::Reaper> reaper) : reaper_(reaper) {}
 
-  std::function<void()> cleanup_;
+  std::shared_ptr<reaper::Reaper> reaper_;
 };
 
 #endif

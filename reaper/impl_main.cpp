@@ -6,6 +6,7 @@
 
 #include "impl.h"
 #include "ipc.h"
+#include "protocol.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -20,12 +21,12 @@ int main(int argc, char** argv) {
     command += argv[i];
   }
 
-  char* ipc_file_var = getenv(kReaperIpcFileEnvVar);
-  if (!ipc_file_var) {
+  char* ipc_token_var = getenv(kReaperIpcFileEnvVar);
+  if (!ipc_token_var) {
     fprintf(stderr, "A %s env var is required.\n", kReaperIpcFileEnvVar);
     return -1;
   }
 
-  ReaperImpl p = ReaperImpl(command, std::string(ipc_file_var));
+  ReaperImpl p = ReaperImpl(command, Token(ipc_token_var));
   p.run();
 }

@@ -17,7 +17,6 @@ def main():
         )
         sys.exit(1)
 
-    # Pop the first argument as sleep_duration
     sleep_duration = int(sys.argv[1])
     remaining_args = sys.argv[2:]
 
@@ -28,14 +27,11 @@ def main():
             + remaining_args
         )
 
-    # Sleep for sleep_duration if it's positive (as milliseconds)
     if sleep_duration > 0:
-        time.sleep(sleep_duration / 1000.0)  # Convert milliseconds to seconds
+        time.sleep(sleep_duration / 1000.0)
     elif sleep_duration < 0:
-        # If sleep_duration is negative, sleep forever
         while True:
             time.sleep(1)
-    # If sleep_duration is 0, exit immediately
 
 
 if __name__ == "__main__":

@@ -16,15 +16,19 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 #include <vector>
 
 #include "reaper/ipc.h"
 #include "reaper/process.h"
+#include "reaper/protocol.h"
 #include "third_party/status/logger.h"
 
 const int32_t kNumPolls = 3;
 
-bool delete_ipc_file = false;
+bool parent_died = false;
+bool ipc_is_live = true;
+
 ReaperImpl* global_impl = nullptr;
 
 namespace {
@@ -79,44 +83,27 @@ void wait_all() {
   }
 }
 
-void on_failed_start(const std::string& ipc_file) {
-  write_state(ipc_file, ReaperState::FAILED_START);
+void on_failed_start(IPC<ReaperMessage>& ipc) {
+  ReaperMessage msg{.code = ReaperMessageCode::INVALID_COMMAND};
+  ipc.send(msg);
   ::exit(1);
 }
 
-void on_fail(const std::string& ipc_file) {
-  write_state(ipc_file, ReaperState::FAILED);
+void on_fail(IPC<ReaperMessage>& ipc) {
+  // ReaperMessage msg{.code = ReaperMessageCode::OTHER_FAILED_LAUNCH};
+  // ipc.send(msg);
   ::exit(1);
 }
 
-void make_parent_pollfd(const std::string& ipc_file, pollfd* poll_fd) {
-  int ppid = getppid();
-  int p_fd = syscall(SYS_pidfd_open, ppid, 0);
-  if (p_fd < 0) {
-    perror("pidfd_open syscall");
-    on_fail(ipc_file);
-  }
-
-  *poll_fd = pollfd{.fd = p_fd, .events = POLLIN};
+void make_parent_pollfd(int parent_pidfd, pollfd* poll_fd) {
+  *poll_fd = pollfd{.fd = parent_pidfd, .events = POLLIN};
 }
 
-void make_ipc_file_pollfd(const std::string& ipc_file, pollfd* poll_fd) {
-  int ipc_fd = inotify_init1(IN_CLOEXEC);
-  if (ipc_fd == -1) {
-    perror("inotify_init1");
-    on_fail(ipc_file);
-  }
-
-  int w = inotify_add_watch(ipc_fd, ipc_file.c_str(), IN_MODIFY);
-  if (w == -1) {
-    perror("inotify_add_watch");
-    on_fail(ipc_file);
-  }
-
-  *poll_fd = pollfd{.fd = ipc_fd, .events = POLLIN};
+void make_ipc_pollfd(IPC<ReaperMessage>& ipc, pollfd* poll_fd) {
+  *poll_fd = pollfd{.fd = ipc.socket(), .events = POLLIN};
 }
 
-void make_sigchld_pollfd_and_block_signal(const std::string& ipc_file,
+void make_sigchld_pollfd_and_block_signal(IPC<ReaperMessage>& ipc,
                                           pollfd* poll_fd) {
   // Block SIGCHLD and create signalfd for it
   sigset_t sigchld_mask;
@@ -124,13 +111,13 @@ void make_sigchld_pollfd_and_block_signal(const std::string& ipc_file,
   sigaddset(&sigchld_mask, SIGCHLD);
   if (sigprocmask(SIG_BLOCK, &sigchld_mask, nullptr) == -1) {
     perror("sigprocmask");
-    on_fail(ipc_file);
+    on_fail(ipc);
   }
 
   int sigchld_fd = signalfd(-1, &sigchld_mask, SFD_CLOEXEC);
   if (sigchld_fd == -1) {
     perror("signalfd");
-    on_fail(ipc_file);
+    on_fail(ipc);
   }
 
   *poll_fd = pollfd{.fd = sigchld_fd, .events = POLLIN};
@@ -146,30 +133,43 @@ void exit_handler(int) {
 }  // namespace
 
 void ReaperImpl::run() {
-  if (!std::filesystem::exists(ipc_file_)) {
-    ERROR("Reaper can't find ipc_file: %s", ipc_file_.c_str());
-    on_failed_start(ipc_file_);
+  // Connect to IPC using the token
+  StatusOr<IPC<ReaperMessage>> ipc_result = IPC<ReaperMessage>::connect(token_);
+  if (!ipc_result.ok()) {
+    ERROR("Reaper failed to connect to IPC: %s",
+          ipc_result.status().to_string().c_str());
+    ::exit(1);
   }
+  ipc_ = std::move(*ipc_result);
+
+  // Receive parent pidfd from Reaper
+  StatusOr<int> parent_pidfd_result = ipc_.receive_fd();
+  if (!parent_pidfd_result.ok()) {
+    ERROR("Failed to receive parent pidfd: %s",
+          parent_pidfd_result.status().to_string().c_str());
+    on_fail(ipc_);
+  }
+  int parent_pidfd = *parent_pidfd_result;
 
   setup_signal_handlers();
 
   // Set up pollfds that listen for the parent exiting and IPC changes
   pollfd poll_fds[kNumPolls];
-  make_parent_pollfd(ipc_file_, &poll_fds[0]);
-  make_ipc_file_pollfd(ipc_file_, &poll_fds[1]);
-  make_sigchld_pollfd_and_block_signal(ipc_file_, &poll_fds[2]);
+  make_parent_pollfd(parent_pidfd, &poll_fds[0]);
+  make_ipc_pollfd(ipc_, &poll_fds[1]);
+  make_sigchld_pollfd_and_block_signal(ipc_, &poll_fds[2]);
   files_.parent_fd = poll_fds[0].fd;
   files_.ipc_file_fd = poll_fds[1].fd;
   files_.sigchld_fd = poll_fds[2].fd;
 
   if (prctl(PR_SET_CHILD_SUBREAPER, 1)) {
     perror("Set child subreaper.");
-    on_fail(ipc_file_);
+    on_fail(ipc_);
   }
 
   StatusOr<int> pid = launch_process({"sh", "-c", command_});
   if (!pid.ok()) {
-    on_failed_start(ipc_file_);
+    on_failed_start(ipc_);
   }
 
   // Handle case where process launches, but fails immediately afterwards, like
@@ -179,38 +179,45 @@ void ReaperImpl::run() {
   int waited = waitpid(*pid, &stat_loc, WNOHANG);
   if (waited) {
     if (stat_loc) {
-      on_failed_start(ipc_file_);
+      on_failed_start(ipc_);
     }
   }
-  write_state(ipc_file_, ReaperState::RUNNING);
+
+  // Send launch success message
+  ReaperMessage success_msg{.code = ReaperMessageCode::FINISHED_LAUNCH};
+  StatusVal send_result = ipc_.send(success_msg);
+  if (!send_result.ok()) {
+    ERROR("Failed to send launch success message");
+    ::exit(1);
+  }
 
   while (true) {
     int r = poll(poll_fds, kNumPolls, -1);
     if (r < 0) {
       perror("poll");
-      write_state(ipc_file_, ReaperState::FAILED);
       ::exit(1);
     }
     if (r == 0) continue;
 
     if (poll_fds[0].revents) {
       // Parent exited. Exit.
-      delete_ipc_file = true;
+      parent_died = true;
       on_exit();
     }
     if (poll_fds[1].revents) {
-      // Ipc file has been updated. Check for exit request.
-      // Read the ipc ionotify to clear its readable state.
-      char buf[4096];
-      read(poll_fds[1].fd, &buf, sizeof(buf));
-
-      StatusOr<ReaperState> state = read_state(ipc_file_);
-      if (!state.ok()) {
-        write_state(ipc_file_, ReaperState::FAILED);
-        ::exit(1);
-      }
-      if (*state == ReaperState::CLEANING_UP) {
+      // IPC message available
+      StatusOr<ReaperMessage> msg = ipc_.receive(/*block=*/true);
+      if (!msg.ok() && msg.status().code() == StatusCode::ABORTED) {
+        ipc_is_live = false;
         on_exit();
+      }
+      if (msg->code == ReaperMessageCode::CLEAN_UP) {
+        on_exit();
+      }
+      if (!msg.ok()) {
+        ERROR("Failed to receive IPC message: %s",
+              msg.status().to_string().c_str());
+        ::exit(1);
       }
     }
     if (poll_fds[2].revents) {
@@ -251,10 +258,17 @@ void ReaperImpl::on_exit() {
     wait_all();
   }
   files_.cleanup();
-  write_state(ipc_file_, ReaperState::FINISHED);
-  if (delete_ipc_file) {
-    printf("Reaper deleting ipc file: %s\n", ipc_file_.c_str());
-    remove(ipc_file_.c_str());
+
+  if (parent_died) {
+    // Parent died, clean up socket file
+    ipc_.cleanup_from_client();
+  } else if (ipc_is_live) {
+    // Normal cleanup, send finished message
+    ReaperMessage finished_msg{.code = ReaperMessageCode::FINISHED_CLEANING_UP};
+    StatusVal send_result = ipc_.send(finished_msg);
+    if (!send_result.ok()) {
+      ERROR("Failed to send cleanup finished message");
+    }
   }
   exit(0);
 }

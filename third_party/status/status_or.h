@@ -34,11 +34,39 @@ enum class StatusCode {
   INVALID_ARGUMENT = 3,
   DEADLINE_EXCEEDED = 4,
   NOT_FOUND = 5,
+  ABORTED = 10,
   // We use INTERNAL errors for cases where we catch a C api error, but don't
   // parse its errno into a specific error type.
   INTERNAL = 13,
   UNAVAILABLE = 14,
 };
+
+inline std::string to_string(StatusCode code) {
+  switch (code) {
+    case StatusCode::OK:
+      return "OK";
+    case StatusCode::UNKNOWN:
+      return "UNKNOWN";
+    case StatusCode::INVALID_ARGUMENT:
+      return "INVALID_ARGUMENT";
+    case StatusCode::DEADLINE_EXCEEDED:
+      return "DEADLINE_EXCEEDED";
+    case StatusCode::NOT_FOUND:
+      return "NOT_FOUND";
+    case StatusCode::ABORTED:
+      return "ABORTED";
+    case StatusCode::INTERNAL:
+      return "INTERNAL";
+    case StatusCode::UNAVAILABLE:
+      return "UNAVAILABLE";
+  }
+  return "UNKNOWN STATUS CODE";
+}
+
+inline std::ostream& operator<<(std::ostream& os, StatusCode code) {
+  os << to_string(code);
+  return os;
+}
 
 class StatusVal {
  public:
@@ -51,25 +79,9 @@ class StatusVal {
   StatusVal status() { return *this; }
 
   std::string to_string() const {
-    std::string str = "UNKNOWN STATUS CODE";
-    switch (code()) {
-      case StatusCode::OK:
-        str = "OK"; break;
-      case StatusCode::UNKNOWN:
-        str = "UNKNOWN"; break;
-      case StatusCode::INVALID_ARGUMENT:
-        str = "INVALID_ARGUMENT"; break;
-      case StatusCode::DEADLINE_EXCEEDED:
-        str = "DEADLINE_EXCEEDED"; break;
-      case StatusCode::NOT_FOUND:
-        str = "NOT_FOUND"; break;
-      case StatusCode::INTERNAL:
-        str = "INTERNAL"; break;
-      case StatusCode::UNAVAILABLE:
-        str = "UNAVAILABLE"; break;
-    }
+    std::string str = ::to_string(code());
     if (msg_.size()) {
-      str += ":" + msg_;
+      str += ": " + msg_;
     }
     return str;
   }
@@ -79,11 +91,19 @@ class StatusVal {
   std::string msg_ = "";
 };
 
+inline std::ostream& operator<<(std::ostream& os, const StatusVal& status) {
+  os << status.to_string();
+  return os;
+}
+
 inline StatusVal OkStatus(std::string msg="") { return StatusVal(StatusCode::OK, msg); }
 inline StatusVal UnknownError(std::string msg="") { return StatusVal(StatusCode::UNKNOWN, msg); }
 inline StatusVal InvalidArgumentError(std::string msg="") { return StatusVal(StatusCode::INVALID_ARGUMENT, msg); }
 inline StatusVal DeadlineExceededError(std::string msg="") { return StatusVal(StatusCode::DEADLINE_EXCEEDED, msg); }
 inline StatusVal NotFoundError(std::string msg="") { return StatusVal(StatusCode::NOT_FOUND, msg); }
+inline StatusVal AbortedError(std::string msg = "") {
+  return StatusVal(StatusCode::ABORTED, msg);
+}
 inline StatusVal InternalError(std::string msg="") { return StatusVal(StatusCode::INTERNAL, msg); }
 inline StatusVal UnavailableError(std::string msg="") { return StatusVal(StatusCode::UNAVAILABLE, msg); }
 
@@ -182,6 +202,13 @@ class StatusOr {
   };
 };
 
+inline StatusVal get_status_(StatusVal s) { return s; }
+
+template <typename T>
+StatusVal get_status_(StatusOr<T> s) {
+  return s.status();
+}
+
 #define RETURN_IF_ERROR(expr)    \
   do {                           \
     auto&& status_or = (expr);   \
@@ -190,10 +217,15 @@ class StatusOr {
     }                            \
   } while (0)
 
+#define CAT(a, b) a##b
+#define CAT_(a, b) CAT(a, b)
+#define UNIQ(v) CAT_(v, __COUNTER__)
 
-#define ASSIGN_OR_RETURN(lhs, rhs) \
-  auto v = rhs;                    \
-  if (!v.ok()) return v.status();  \
-  lhs = *v;
+#define ASSIGN_OR_RETURN(lhs, rhs) ASSIGN_OR_RETURN_IMPL(UNIQ(v), lhs, rhs)
+
+#define ASSIGN_OR_RETURN_IMPL(var, lhs, rhs) \
+  auto var = rhs;                            \
+  if (!var.ok()) return var.status();        \
+  lhs = std::move(var.value());
 
 #endif  // STATUS_OR_H_

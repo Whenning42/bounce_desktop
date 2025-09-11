@@ -9,13 +9,14 @@
 
 #include <string>
 
+#include "reaper/ipc.h"
+#include "reaper/protocol.h"
+
 struct Files {
   int parent_fd = -1;
-  int ipc_file_fd = -1;
   int sigchld_fd = -1;
   void cleanup() {
     if (parent_fd != -1) close(parent_fd);
-    if (ipc_file_fd != -1) close(ipc_file_fd);
     if (sigchld_fd != -1) close(sigchld_fd);
   }
 };
@@ -23,10 +24,10 @@ struct Files {
 class ReaperImpl {
  public:
   // Launch the reaper with the given 'command' running under it.
-  // Use 'ipc_file' to recieve cleanup requests and report errors to reaper's
-  // caller. Blocks until the process manager exits.
-  ReaperImpl(const std::string& command, const std::string& ipc_file)
-      : command_(command), ipc_file_(ipc_file) {}
+  // Use 'token' to connect to IPC, report launch results and receive cleanup
+  // requests. Blocks until the process manager exits.
+  ReaperImpl(const std::string& command, const Token& token)
+      : command_(command), token_(token) {}
 
   // Run the reaper's main loop. Start by launching the 'command' given in the
   // constructor. Then poll for any reapable children, changes to ipc_file, or
@@ -46,7 +47,8 @@ class ReaperImpl {
   void setup_signal_handlers();
 
   std::string command_;
-  std::string ipc_file_;
+  Token token_;
+  IPC<ReaperMessage> ipc_;
   Files files_;
 };
 

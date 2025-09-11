@@ -27,9 +27,7 @@ def main():
     command = [reaper_path, "python3", "./reaper/tests/reaper_ptree.py", *reaper_args]
     p = subprocess.Popen(command, env=env)
 
-    # Sleep for 100ms before exiting
     time.sleep(0.1)
-
     r = p.poll()
     if r is not None:
         print(f"reaper_parent.py exited with code: {r}")

@@ -1,6 +1,8 @@
 #include "reaper/reaper.h"
 
 #include <spawn.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -30,58 +32,79 @@ char** make_reaper_env(const std::string& ipc_file,
   return new_environ;
 }
 
-StatusOr<int> launch_reaper(const std::string& command,
-                            const std::string& ipc_file) {
-  std::ofstream of(ipc_file);
-  write_state(ipc_file, ReaperState::LAUNCHING);
+StatusOr<int> Reaper::launch() {
+  Token token;
+  ASSIGN_OR_RETURN(ipc_, IPC<ReaperMessage>::create(ipc_dir_, &token));
 
+  // Launch reaper executable with the command and IPC env var.
   std::string reaper_env_var;
-  char** reaper_env = make_reaper_env(ipc_file, &reaper_env_var);
-
-  // Launch reaper executable with the command
+  char** reaper_env = make_reaper_env(token, &reaper_env_var);
   const char* reaper_path = "./build/reaper";
   char* reaper_argv[] = {const_cast<char*>("reaper"),
-                         const_cast<char*>(command.c_str()), nullptr};
+                         const_cast<char*>(command_.c_str()), nullptr};
   int pid;
   int r = posix_spawnp(&pid, reaper_path, /*file_actions=*/nullptr,
                        /*attr=*/nullptr, reaper_argv, reaper_env);
-
   delete[] reaper_env;
 
   if (r) {
     errno = r;
     perror("posix_spawnp");
-    return StatusOr<int>(StatusCode::INVALID_ARGUMENT);
+    return InternalError("Failed to launch the reaper");
   }
 
-  StatusOr<ReaperState> state = wait_for_state(
-      ipc_file, {ReaperState::RUNNING, ReaperState::FAILED_START});
-  RETURN_IF_ERROR(state);
-  if (*state != ReaperState::RUNNING) {
-    return InvalidArgumentError();
+  // Create pidfd for the current process and send it to ReaperImpl
+  int pidfd = syscall(SYS_pidfd_open, getpid(), 0);
+  if (pidfd < 0) {
+    perror("pidfd_open syscall in Reaper");
+    return InternalError("Failed to create pidfd");
+  }
+
+  StatusVal send_fd_result = ipc_.send_fd(pidfd);
+  close(pidfd);  // Close it in Reaper, ReaperImpl has its own copy now
+  if (!send_fd_result.ok()) {
+    return InternalError("Failed to send pidfd to reaper");
+  }
+
+  ASSIGN_OR_RETURN(ReaperMessage message, ipc_.receive());
+  if (message.code != ReaperMessageCode::FINISHED_LAUNCH) {
+    return InvalidArgumentError("Reaper failed to launch the subcommand");
   }
   return pid;
 }
 
-StatusVal clean_up(const std::string& ipc_file,
-                   std::chrono::nanoseconds timeout) {
+StatusVal Reaper::clean_up(std::chrono::nanoseconds timeout) {
   // If the reaper's already been closed by being directly signaled, then
-  // it's state will be FINISHED_CLEANING_UP and we can exit without doing
+  // its state will be FINISHED_CLEANING_UP and we can exit without doing
   // anything.
-  StatusOr<ReaperState> read_status = read_state(ipc_file);
-  RETURN_IF_ERROR(read_status);
-  if (*read_status == ReaperState::FINISHED) {
+  StatusOr<ReaperMessage> r = ipc_.receive(/*blocking=*/false);
+  if (r.ok() && r->code == ReaperMessageCode::FINISHED_CLEANING_UP) {
     return OkStatus();
   }
+  if (r.ok() && (int)r->code > 4) {
+    return InternalError(
+        std::format("Invalid reply from reaper? {}", (int)r->code));
+  }
 
-  StatusVal write_status = write_state(ipc_file, ReaperState::CLEANING_UP);
-  RETURN_IF_ERROR(write_status);
+  // The reaper can already have exited by now either cleanly, via
+  // sigint/sigterm, or dirtily, via sigkill. We don't have a nice way to
+  // distinguish the two cases, and neither is expected normal use. We just
+  // return a NotFound error when this happens.
+  StatusVal status =
+      ipc_.send(ReaperMessage{.code = ReaperMessageCode::CLEAN_UP});
+  if (status.code() == StatusCode::ABORTED) {
+    return NotFoundError(
+        "Called clean_up on a reaper that's no longer running");
+  } else {
+    RETURN_IF_ERROR(status);
+  }
 
-  StatusOr<ReaperState> wait_status = wait_for_state(
-      ipc_file, {ReaperState::FINISHED}, /*timeout=*/timeout);
-  RETURN_IF_ERROR(wait_status);
-  printf("Reaper-launcher deleting ipc file: %s\n", ipc_file.c_str());
-  remove(ipc_file.c_str());
+  StatusOr<ReaperMessage> m = ipc_.receive(/*blocking=*/true);
+  RETURN_IF_ERROR(m);
+
+  if (m->code != ReaperMessageCode::FINISHED_CLEANING_UP) {
+    return UnknownError("Reaper returned seemingly impossible message.");
+  }
   return OkStatus();
 }
 

@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include <chrono>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <string>
@@ -40,10 +41,10 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
       "{} {} -- {}",
       port_str, width_str, height_str, command);
 
-  RETURN_IF_ERROR(reaper::launch_reaper(weston_command, ipc_file));
-  auto cleanup = [ipc_file]() {
-    reaper::clean_up(ipc_file, std::chrono::seconds(5));
-  };
+  // Create reaper instance and launch
+  auto reaper = std::make_shared<reaper::Reaper>(
+      weston_command, std::filesystem::path(ipc_file).parent_path().string());
+  RETURN_IF_ERROR(reaper->launch());
 
-  return std::unique_ptr<WaylandBackend>(new WaylandBackend(cleanup));
+  return std::unique_ptr<WaylandBackend>(new WaylandBackend(reaper));
 }
