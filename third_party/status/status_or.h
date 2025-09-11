@@ -42,7 +42,7 @@ enum class StatusCode {
 
 class StatusVal {
  public:
-  explicit StatusVal(StatusCode code) : code_(code) {}
+  explicit StatusVal(StatusCode code, std::string msg = "") : code_(code), msg_(msg) {}
 
   bool ok() const { return code_ == StatusCode::OK; }
   StatusCode code() const { return code_; }
@@ -51,36 +51,41 @@ class StatusVal {
   StatusVal status() { return *this; }
 
   std::string to_string() const {
+    std::string str = "UNKNOWN STATUS CODE";
     switch (code()) {
       case StatusCode::OK:
-        return "OK";
+        str = "OK"; break;
       case StatusCode::UNKNOWN:
-        return "UNKNOWN";
+        str = "UNKNOWN"; break;
       case StatusCode::INVALID_ARGUMENT:
-        return "INVALID_ARGUMENT";
+        str = "INVALID_ARGUMENT"; break;
       case StatusCode::DEADLINE_EXCEEDED:
-        return "DEADLINE_EXCEEDED";
+        str = "DEADLINE_EXCEEDED"; break;
       case StatusCode::NOT_FOUND:
-        return "NOT_FOUND";
+        str = "NOT_FOUND"; break;
       case StatusCode::INTERNAL:
-        return "INTERNAL";
+        str = "INTERNAL"; break;
       case StatusCode::UNAVAILABLE:
-        return "UNAVAILABLE";
+        str = "UNAVAILABLE"; break;
     }
-    return "UNKNOWN_STATUS_CODE";
+    if (msg_.size()) {
+      str += ":" + msg_;
+    }
+    return str;
   }
 
  private:
   StatusCode code_ = StatusCode::OK;
+  std::string msg_ = "";
 };
 
-inline StatusVal OkStatus() { return StatusVal(StatusCode::OK); }
-inline StatusVal UnknownError() { return StatusVal(StatusCode::UNKNOWN); }
-inline StatusVal InvalidArgumentError() { return StatusVal(StatusCode::INVALID_ARGUMENT); }
-inline StatusVal DeadlineExceededError() { return StatusVal(StatusCode::DEADLINE_EXCEEDED); }
-inline StatusVal NotFoundError() { return StatusVal(StatusCode::NOT_FOUND); }
-inline StatusVal InternalError() { return StatusVal(StatusCode::INTERNAL); }
-inline StatusVal UnavailableError() { return StatusVal(StatusCode::UNAVAILABLE); }
+inline StatusVal OkStatus(std::string msg="") { return StatusVal(StatusCode::OK, msg); }
+inline StatusVal UnknownError(std::string msg="") { return StatusVal(StatusCode::UNKNOWN, msg); }
+inline StatusVal InvalidArgumentError(std::string msg="") { return StatusVal(StatusCode::INVALID_ARGUMENT, msg); }
+inline StatusVal DeadlineExceededError(std::string msg="") { return StatusVal(StatusCode::DEADLINE_EXCEEDED, msg); }
+inline StatusVal NotFoundError(std::string msg="") { return StatusVal(StatusCode::NOT_FOUND, msg); }
+inline StatusVal InternalError(std::string msg="") { return StatusVal(StatusCode::INTERNAL, msg); }
+inline StatusVal UnavailableError(std::string msg="") { return StatusVal(StatusCode::UNAVAILABLE, msg); }
 
 template <typename T>
 class StatusOr {

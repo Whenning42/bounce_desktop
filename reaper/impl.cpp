@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "reaper/ipc.h"
+#include "reaper/process.h"
 #include "third_party/status/logger.h"
 
 const int32_t kNumPolls = 3;
@@ -27,6 +28,10 @@ bool delete_ipc_file = false;
 ReaperImpl* global_impl = nullptr;
 
 namespace {
+
+using std::chrono::milliseconds;
+using std::this_thread::sleep_for;
+
 std::vector<int> get_pid_tids(int pid) {
   std::vector<int> tids;
   std::error_code error;
@@ -146,47 +151,38 @@ void ReaperImpl::run() {
     on_failed_start(ipc_file_);
   }
 
+  setup_signal_handlers();
+
   // Set up pollfds that listen for the parent exiting and IPC changes
   pollfd poll_fds[kNumPolls];
   make_parent_pollfd(ipc_file_, &poll_fds[0]);
   make_ipc_file_pollfd(ipc_file_, &poll_fds[1]);
+  make_sigchld_pollfd_and_block_signal(ipc_file_, &poll_fds[2]);
   files_.parent_fd = poll_fds[0].fd;
   files_.ipc_file_fd = poll_fds[1].fd;
+  files_.sigchld_fd = poll_fds[2].fd;
 
   if (prctl(PR_SET_CHILD_SUBREAPER, 1)) {
     perror("Set child subreaper.");
     on_fail(ipc_file_);
   }
 
-  const char* sh = "sh";
-  const char* c = "-c";
-  char* shell_argv[] = {const_cast<char*>(sh), const_cast<char*>(c),
-                        const_cast<char*>(command_.c_str()), nullptr};
-  int pid;
-  int r = posix_spawnp(&pid, "sh", /*file_actions=*/nullptr, /*attr=*/nullptr,
-                       shell_argv, environ);
-  if (r) {
-    errno = r;
-    perror("posix_spawnp");
+  StatusOr<int> pid = launch_process({"sh", "-c", command_});
+  if (!pid.ok()) {
     on_failed_start(ipc_file_);
   }
+
   // Handle case where process launches, but fails immediately afterwards, like
   // we have when sh gives "command not found".
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  sleep_for(milliseconds(20));
   int stat_loc;
-  int waited = waitpid(pid, &stat_loc, WNOHANG);
+  int waited = waitpid(*pid, &stat_loc, WNOHANG);
   if (waited) {
     if (stat_loc) {
       on_failed_start(ipc_file_);
     }
   }
-
-  // Set up SIGCHLD handling after spawning the child
-  make_sigchld_pollfd_and_block_signal(ipc_file_, &poll_fds[2]);
-  files_.sigchld_fd = poll_fds[2].fd;
   write_state(ipc_file_, ReaperState::RUNNING);
-
-  setup_signal_handlers();
 
   while (true) {
     int r = poll(poll_fds, kNumPolls, -1);
@@ -255,8 +251,9 @@ void ReaperImpl::on_exit() {
     wait_all();
   }
   files_.cleanup();
-  write_state(ipc_file_, ReaperState::FINISHED_CLEANUP);
+  write_state(ipc_file_, ReaperState::FINISHED);
   if (delete_ipc_file) {
+    printf("Reaper deleting ipc file: %s\n", ipc_file_.c_str());
     remove(ipc_file_.c_str());
   }
   exit(0);

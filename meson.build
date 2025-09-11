@@ -44,6 +44,13 @@ reaper_test = executable('reaper_test',
   include_directories : ['third_party']
 )
 
+ipc_test = executable('ipc_test',
+  'reaper/ipc_test.cpp',
+  dependencies : [gtest_dep],
+  include_directories : ['third_party']
+)
+
 test('client_test', client_test, is_parallel : false,  workdir : meson.source_root())
 test('reaper_test', reaper_test, is_parallel : false, workdir : meson.source_root())
+test('ipc_test', ipc_test, is_parallel : false, workdir : meson.source_root())
 

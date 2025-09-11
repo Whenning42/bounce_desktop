@@ -33,7 +33,7 @@ char** make_reaper_env(const std::string& ipc_file,
 StatusOr<int> launch_reaper(const std::string& command,
                             const std::string& ipc_file) {
   std::ofstream of(ipc_file);
-  write_state(ipc_file, ReaperState::STARTING);
+  write_state(ipc_file, ReaperState::LAUNCHING);
 
   std::string reaper_env_var;
   char** reaper_env = make_reaper_env(ipc_file, &reaper_env_var);
@@ -58,9 +58,9 @@ StatusOr<int> launch_reaper(const std::string& command,
       ipc_file, {ReaperState::RUNNING, ReaperState::FAILED_START});
   RETURN_IF_ERROR(state);
   if (*state != ReaperState::RUNNING) {
-    return StatusOr<int>(StatusCode::INVALID_ARGUMENT);
+    return InvalidArgumentError();
   }
-  return StatusOr<int>(static_cast<int>(pid));
+  return pid;
 }
 
 StatusVal clean_up(const std::string& ipc_file,
@@ -70,7 +70,7 @@ StatusVal clean_up(const std::string& ipc_file,
   // anything.
   StatusOr<ReaperState> read_status = read_state(ipc_file);
   RETURN_IF_ERROR(read_status);
-  if (*read_status == ReaperState::FINISHED_CLEANUP) {
+  if (*read_status == ReaperState::FINISHED) {
     return OkStatus();
   }
 
@@ -78,8 +78,9 @@ StatusVal clean_up(const std::string& ipc_file,
   RETURN_IF_ERROR(write_status);
 
   StatusOr<ReaperState> wait_status = wait_for_state(
-      ipc_file, {ReaperState::FINISHED_CLEANUP}, /*timeout=*/timeout);
+      ipc_file, {ReaperState::FINISHED}, /*timeout=*/timeout);
   RETURN_IF_ERROR(wait_status);
+  printf("Reaper-launcher deleting ipc file: %s\n", ipc_file.c_str());
   remove(ipc_file.c_str());
   return OkStatus();
 }
