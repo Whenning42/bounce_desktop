@@ -66,7 +66,7 @@ void close_all_descendants() {
     for (int child : children) {
       sigterm(child);
     }
-    usleep(10'000);
+    usleep(100'000);
     wait_all();
 
     for (int child : get_children()) {
