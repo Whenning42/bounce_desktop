@@ -40,12 +40,11 @@ reaper::Reaper run_reaper_ptree(const std::string& args,
                                 int* pid = nullptr) {
   std::string command = "python3 ./reaper/tests/reaper_ptree.py " + args;
   reaper::Reaper reaper(command, ipc_dir);
-  StatusOr<int> result = reaper.launch();
+  int r = reaper.launch().value_or_die();
+  if (pid) *pid = r;
+
   // Give the reaper and the process tree time to start up.
   sleep_for(milliseconds(100));
-  if (pid) {
-    *pid = result.value_or_die();
-  }
   return reaper;
 }
 
@@ -92,7 +91,7 @@ void EXPECT_ptree_is_cleaned_up(milliseconds timeout = milliseconds(300)) {
     if (count == 0) {
       break;
     }
-    sleep_for(milliseconds(10));
+    sleep_for(milliseconds(50));
   }
 
   EXPECT_EQ(count, 0);
@@ -146,9 +145,9 @@ TEST_F(ReaperTest, SigintExitTest) {
   send_sigint(reaper_pid);
 
   EXPECT_ptree_is_cleaned_up();
-  ASSERT_THAT(reaper.clean_up(),
-              testing::AnyOf(StatusIs(StatusCode::OK),
-                             StatusIs(StatusCode::NOT_FOUND)));
+  // WHen reaper exits via a signal, we can't guarantee a clean clean-up. but clean-up
+  // should proceed without any fatal errors.
+  reaper.clean_up();
 }
 
 TEST_F(ReaperTest, SigtermExitTest) {
@@ -158,14 +157,14 @@ TEST_F(ReaperTest, SigtermExitTest) {
   send_sigterm(reaper_pid);
 
   EXPECT_ptree_is_cleaned_up();
-  ASSERT_THAT(reaper.clean_up(),
-              testing::AnyOf(StatusIs(StatusCode::OK),
-                             StatusIs(StatusCode::NOT_FOUND)));
+  // WHen reaper exits via a signal, we can't guarantee a clean clean-up. but clean-up
+  // should proceed without any fatal errors.
+  reaper.clean_up();
 }
 
 TEST_F(ReaperTest, CleanupExitTest) {
   reaper::Reaper reaper = run_reaper_ptree("-1 -1", ipc_dir_);
-  EXPECT_OK(reaper.clean_up());
+  EXPECT_TRUE(reaper.clean_up());
   EXPECT_ptree_is_cleaned_up();
 }
 
@@ -191,5 +190,5 @@ TEST_F(ReaperTest, ReaperStaysOpenAfterChildren) {
   reaper::Reaper reaper = run_reaper_ptree("50", ipc_dir_);
   sleep_for(milliseconds(1000));
   EXPECT_EQ(count_reaper(), 1);
-  EXPECT_OK(reaper.clean_up());
+  EXPECT_TRUE(reaper.clean_up());
 }

@@ -22,206 +22,109 @@
 #include "reaper/ipc.h"
 #include "reaper/process.h"
 #include "reaper/protocol.h"
+#include "reaper/cleanup.h"
 #include "third_party/status/logger.h"
 
-const int32_t kNumPolls = 3;
 
 bool parent_died = false;
-bool ipc_is_live = true;
-
 ReaperImpl* global_impl = nullptr;
 
 namespace {
-
 using std::chrono::milliseconds;
 using std::this_thread::sleep_for;
 
-std::vector<int> get_pid_tids(int pid) {
-  std::vector<int> tids;
-  std::error_code error;
-  std::filesystem::path task_dir =
-      std::filesystem::path("/proc") / std::to_string(pid) / "task";
+const int32_t kNumPolls = 3;
+enum PollSlots {
+  kParentIdx = 0,
+  kIpcIdx = 1,
+  kSigchldIdx = 2,
+};
 
-  for (const auto& entry :
-       std::filesystem::directory_iterator(task_dir, error)) {
-    if (error) break;
-    const std::string name = entry.path().filename().string();
-    tids.push_back((int)std::stoll(name));
-  }
-  return tids;
-}
-
-std::vector<int> get_children() {
-  int pid = getpid();
-  std::vector<int> out;
-  std::vector<int> tids = get_pid_tids(pid);
-  for (int tid : tids) {
-    std::ifstream in("/proc/" + std::to_string(pid) + "/task/" +
-                     std::to_string(tid) + "/children");
-    if (!in) continue;
-
-    int id;
-    while (in >> id) {
-      out.push_back(id);
-    }
-  }
-  return out;
-}
-
-void sigterm(int pid) { kill(pid, SIGTERM); }
-
-void sigkill(int pid) { kill(pid, SIGKILL); }
-
-// wait_all is async-signal-safe.
-void wait_all() {
-  while (true) {
-    int r = waitpid(-1, nullptr, WNOHANG);
-    if (r == 0) break;
-    if (r == -1) {
-      break;
-    }
-  }
-}
-
-void on_failed_start(IPC<ReaperMessage>& ipc) {
-  ReaperMessage msg{.code = ReaperMessageCode::INVALID_COMMAND};
-  ipc.send(msg);
-  ::exit(1);
-}
-
-void on_fail(IPC<ReaperMessage>& ipc) {
-  // ReaperMessage msg{.code = ReaperMessageCode::OTHER_FAILED_LAUNCH};
-  // ipc.send(msg);
-  ::exit(1);
-}
-
-void make_parent_pollfd(int parent_pidfd, pollfd* poll_fd) {
-  *poll_fd = pollfd{.fd = parent_pidfd, .events = POLLIN};
-}
-
-void make_ipc_pollfd(IPC<ReaperMessage>& ipc, pollfd* poll_fd) {
-  *poll_fd = pollfd{.fd = ipc.socket(), .events = POLLIN};
-}
-
-void make_sigchld_pollfd_and_block_signal(IPC<ReaperMessage>& ipc,
-                                          pollfd* poll_fd) {
-  // Block SIGCHLD and create signalfd for it
+int make_sigchld_signalfd_and_block_signal() {
+  // Block SIGCHLD.
   sigset_t sigchld_mask;
   sigemptyset(&sigchld_mask);
   sigaddset(&sigchld_mask, SIGCHLD);
   if (sigprocmask(SIG_BLOCK, &sigchld_mask, nullptr) == -1) {
-    perror("sigprocmask");
-    on_fail(ipc);
+    FATAL("sigprocmask" + libc_error_name(errno));
   }
 
+  // Open sigchld signalfd.
   int sigchld_fd = signalfd(-1, &sigchld_mask, SFD_CLOEXEC);
   if (sigchld_fd == -1) {
-    perror("signalfd");
-    on_fail(ipc);
+    FATAL("signalfd" + libc_error_name(errno));
   }
-
-  *poll_fd = pollfd{.fd = sigchld_fd, .events = POLLIN};
+  return sigchld_fd;
 }
 
-void exit_handler(int) {
-  sigset_t all_signals;
-  sigfillset(&all_signals);
-  sigprocmask(SIG_BLOCK, &all_signals, nullptr);
-
-  global_impl->on_exit();
+void set_child_subreaper() {
+  if (prctl(PR_SET_CHILD_SUBREAPER, 1)) {
+    FATAL("Set child subreaper:" + libc_error_name(errno));
+  }
 }
+
+void exit_handler(int) { global_impl->on_exit(); }
 }  // namespace
 
 void ReaperImpl::run() {
-  // Connect to IPC using the token
-  StatusOr<IPC<ReaperMessage>> ipc_result = IPC<ReaperMessage>::connect(token_);
-  if (!ipc_result.ok()) {
-    ERROR("Reaper failed to connect to IPC: %s",
-          ipc_result.status().to_string().c_str());
-    ::exit(1);
-  }
-  ipc_ = std::move(*ipc_result);
+  ipc_ = std::move(IPC<ReaperMessage>::connect(token_).value_or_die());
 
-  // Receive parent pidfd from Reaper
-  StatusOr<int> parent_pidfd_result = ipc_.receive_fd();
-  if (!parent_pidfd_result.ok()) {
-    ERROR("Failed to receive parent pidfd: %s",
-          parent_pidfd_result.status().to_string().c_str());
-    on_fail(ipc_);
-  }
-  int parent_pidfd = *parent_pidfd_result;
-
+  set_child_subreaper();
   setup_signal_handlers();
-
-  // Set up pollfds that listen for the parent exiting and IPC changes
-  pollfd poll_fds[kNumPolls];
-  make_parent_pollfd(parent_pidfd, &poll_fds[0]);
-  make_ipc_pollfd(ipc_, &poll_fds[1]);
-  make_sigchld_pollfd_and_block_signal(ipc_, &poll_fds[2]);
-  files_.parent_fd = poll_fds[0].fd;
-  files_.ipc_file_fd = poll_fds[1].fd;
-  files_.sigchld_fd = poll_fds[2].fd;
-
-  if (prctl(PR_SET_CHILD_SUBREAPER, 1)) {
-    perror("Set child subreaper.");
-    on_fail(ipc_);
-  }
+  int sigchld_signalfd = make_sigchld_signalfd_and_block_signal();
+  int parent_pidfd = ipc_.receive_fd().value_or_die();
+  owned_files_ = OwnedFds(parent_pidfd, sigchld_signalfd);
 
   StatusOr<int> pid = launch_process({"sh", "-c", command_});
   if (!pid.ok()) {
-    on_failed_start(ipc_);
+    ipc_.send(ReaperMessage{ReaperMessageCode::INVALID_COMMAND});
+    ERROR(pid.to_string());
+    return;
   }
 
-  // Handle case where process launches, but fails immediately afterwards, like
-  // we have when sh gives "command not found".
+  // Check if the launched process exits quickly after launch. This can happen
+  // if you give the shell an invalid command and so we return an
+  // INVALID_COMMAND value.
   sleep_for(milliseconds(20));
-  int stat_loc;
-  int waited = waitpid(*pid, &stat_loc, WNOHANG);
-  if (waited) {
-    if (stat_loc) {
-      on_failed_start(ipc_);
-    }
+  int stat;
+  int wait_pid = waitpid(*pid, &stat, WNOHANG);
+  if (wait_pid != 0 && stat != 0) {
+    ipc_.send(ReaperMessage{ReaperMessageCode::INVALID_COMMAND});
+    ERROR("Launched program exited shortly after launch.");
+    return;
   }
 
   // Send launch success message
   ReaperMessage success_msg{.code = ReaperMessageCode::FINISHED_LAUNCH};
-  StatusVal send_result = ipc_.send(success_msg);
-  if (!send_result.ok()) {
-    ERROR("Failed to send launch success message");
-    ::exit(1);
-  }
+  CHECK_OK(ipc_.send(success_msg));
+
+  pollfd poll_fds[kNumPolls];
+  poll_fds[kParentIdx] = pollfd{.fd = parent_pidfd, .events = POLLIN, .revents = 0};
+  poll_fds[kIpcIdx] = pollfd{.fd = ipc_.socket(), .events = POLLIN, .revents = 0};
+  poll_fds[kSigchldIdx] = pollfd{.fd = sigchld_signalfd, .events = POLLIN, .revents = 0};
 
   while (true) {
     int r = poll(poll_fds, kNumPolls, -1);
-    if (r < 0) {
-      perror("poll");
-      ::exit(1);
-    }
+    CHECK(r >= 0);
     if (r == 0) continue;
 
-    if (poll_fds[0].revents) {
-      // Parent exited. Exit.
+    if (poll_fds[kParentIdx].revents) {
       parent_died = true;
       on_exit();
     }
-    if (poll_fds[1].revents) {
-      // IPC message available
+
+    if (poll_fds[kIpcIdx].revents) {
       StatusOr<ReaperMessage> msg = ipc_.receive(/*block=*/true);
       if (!msg.ok() && msg.status().code() == StatusCode::ABORTED) {
-        ipc_is_live = false;
         on_exit();
       }
-      if (msg->code == ReaperMessageCode::CLEAN_UP) {
+      if (msg.ok() && msg->code == ReaperMessageCode::CLEAN_UP) {
         on_exit();
       }
-      if (!msg.ok()) {
-        ERROR("Failed to receive IPC message: %s",
-              msg.status().to_string().c_str());
-        ::exit(1);
-      }
+      CHECK_OK(msg);
     }
-    if (poll_fds[2].revents) {
-      // SIGCHLD received via signalfd. Reap children.
+
+    if (poll_fds[kSigchldIdx].revents) {
       signalfd_siginfo si;
       read(poll_fds[2].fd, &si, sizeof(si));
       wait_all();
@@ -237,40 +140,20 @@ void ReaperImpl::setup_signal_handlers() {
 }
 
 void ReaperImpl::on_exit() {
-  while (true) {
-    std::vector<int> children = get_children();
-    if (children.size() == 0) {
-      break;
-    }
+  // Block signals to make procedure async-signal-safe.
+  // This is fine since we're tearing down the process anyway.
+  sigset_t all_signals;
+  sigfillset(&all_signals);
+  sigprocmask(SIG_BLOCK, &all_signals, nullptr);
 
-    for (int child : children) {
-      sigterm(child);
-    }
-    usleep(10'000);
-    wait_all();
-
-    for (int child : get_children()) {
-      auto it = std::find(children.begin(), children.end(), child);
-      if (it != children.end()) {
-        sigkill(child);
-      }
-    }
-    wait_all();
-  }
-  files_.cleanup();
+  close_all_descendants();
 
   if (parent_died) {
-    // Parent died, clean up socket file
     ipc_.cleanup_from_client();
-  } else if (ipc_is_live) {
-    // Normal cleanup, send finished message
-    ReaperMessage finished_msg{.code = ReaperMessageCode::FINISHED_CLEANING_UP};
-    StatusVal send_result = ipc_.send(finished_msg);
-    if (!send_result.ok()) {
-      ERROR("Failed to send cleanup finished message");
-    }
+    exit(0);
   }
+
+  ReaperMessage finished_msg{.code = ReaperMessageCode::FINISHED_CLEANING_UP};
+  CHECK_OK(ipc_.send(finished_msg));
   exit(0);
 }
-
-void ReaperImpl::on_sigchld() { wait_all(); }

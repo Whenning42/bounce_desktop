@@ -23,78 +23,15 @@
 #include <limits.h>
 #include <stdint.h>
 
-static const char* _st_exe_path() {
-    static char path[PATH_MAX];
-    static bool init = false;
-    if (!init) {
-        ssize_t n = readlink("/proc/self/exe", path, sizeof(path) - 1);
-        if (n >= 0) path[n] = '\0';
-        else std::snprintf(path, sizeof(path), "%s", "/proc/self/exe");
-        init = true;
-    }
-    return path;
-}
-
-static std::string _st_addr2line(void* addr) {
-    // -C (demangle), -f (function), -p (pretty), -e exe
-    char cmd[1024];
-    std::snprintf(cmd, sizeof(cmd), "addr2line -Cfpe %s %p", _st_exe_path(),
-                  (void*)( (uintptr_t)addr - 1 )); // -1 gets into the call site
-    FILE* fp = popen(cmd, "r");
-    if (!fp) return {};
-    char buf[1024];
-    std::string out;
-    while (std::fgets(buf, sizeof(buf), fp)) out += buf;
-    pclose(fp);
-    while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back();
-    return out;
-}
-
-inline void print_backtrace(int skip_frames = 1, bool with_file_lines = true,
-                            int max_frames = 64, FILE* out = stderr) {
-    if (max_frames > 256) max_frames = 256;
-    void* buffer[256];
-    int n = ::backtrace(buffer, max_frames);
-
-    std::fprintf(out, "Stack trace (most recent call first):\n");
-    for (int i = skip_frames; i < n; ++i) {
-        void* addr = buffer[i];
-        Dl_info info{};
-        const char* sym = nullptr;
-        const char* image = nullptr;
-        uintptr_t offset = 0;
-
-        if (::dladdr(addr, &info) && info.dli_sname) {
-            int status = 0;
-            char* dem = abi::__cxa_demangle(info.dli_sname, nullptr, nullptr, &status);
-            sym = (status == 0 && dem) ? dem : info.dli_sname;
-            image = info.dli_fname ? info.dli_fname : "?";
-            offset = (uintptr_t)addr - (uintptr_t)info.dli_saddr;
-            std::fprintf(out, "  #%02d %p %s + 0x%zx (%s)\n",
-                         i - skip_frames, addr, sym, (size_t)offset, image);
-            std::free(dem);
-        } else {
-            std::fprintf(out, "  #%02d %p (no symbol)\n", i - skip_frames, addr);
-        }
-
-        if (with_file_lines) {
-            std::string loc = _st_addr2line(addr);
-            if (!loc.empty()) std::fprintf(out, "        at %s\n", loc.c_str());
-        }
-    }
-    std::fflush(out);
-}
+#include "reaper/libc_error.h"
+#include "third_party/status/status_or.h"
 
 namespace {
 
-void check(int v, const char* msg) {
+void ccheck(int v, const char* msg) {
   if (v == -1) {
-    perror(msg);
-#ifdef __GLIBC__
-    const char* errname = strerrorname_np(errno);
-    fprintf(stderr, "Error val: %s\n", errname);
-#endif
-    print_backtrace();
+    ERROR("%s: %s\n", msg, libc_error_name(errno).c_str());
+    ERROR(get_backtrace());
     exit(1);
   }
 }
@@ -132,15 +69,15 @@ sockaddr_un make_addr_un(const std::string& path) {
 
 int make_server_socket(const std::string& path) {
   int sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
-  check(sock, "sock");
+  ccheck(sock, "sock");
   sockaddr_un addr = make_addr_un(path.c_str());
-  check(bind(sock, (struct sockaddr*)&addr, sizeof(sockaddr_un)), "bind");
-  check(listen(sock, 1), "listen");
+  ccheck(bind(sock, (struct sockaddr*)&addr, sizeof(sockaddr_un)), "bind");
+  ccheck(listen(sock, 1), "listen");
   return sock;
 }
 
 struct CMessage {
-  struct msghdr msg = {0};
+  struct msghdr msg = {};
   char control[CMSG_SPACE(sizeof(int))];
   char iobuf[1];
   struct iovec iov;
@@ -165,9 +102,9 @@ struct CMessage {
 void set_fd_blocking(int fd, bool blocking) {
   if (fd < 0) return;
   int flags = fcntl(fd, F_GETFL, 0);
-  check(flags, "fcntl get flags");
+  ccheck(flags, "fcntl get flags");
   flags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
-  check(fcntl(fd, F_SETFL, flags), "fcntl set flags");
+  ccheck(fcntl(fd, F_SETFL, flags), "fcntl set flags");
 }
 }
 
@@ -191,9 +128,9 @@ StatusOr<IPC<M>> IPC<M>::connect(const Token& token) {
   ipc.connected_ = true;
   ipc.socket_path_ = token;
   ipc.socket_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
-  check(ipc.socket_, "connect socket");
+  ccheck(ipc.socket_, "connect socket");
   sockaddr_un addr = make_addr_un(token.c_str());
-  check(::connect(ipc.socket_, (sockaddr*)&addr, sizeof(sockaddr_un)), "connect");
+  ccheck(::connect(ipc.socket_, (sockaddr*)&addr, sizeof(sockaddr_un)), "connect");
   return ipc;
 }
 
@@ -241,7 +178,7 @@ StatusOr<M> IPC<M>::receive(bool block) {
   if (r == 0 || (r == -1 && errno == ECONNRESET)) {
     return AbortedError("receive's peer has hung up.");
   }
-  check(r, "recv");
+  ccheck(r, "recv");
 
   if (r < (int)sizeof(m)) {
     size_t expected = sizeof(m);
@@ -265,7 +202,7 @@ StatusOr<int> IPC<M>::receive_fd(bool block) {
   if (r == 0 || (r == -1 && errno == ECONNRESET)) {
     return AbortedError("receive_fd's peer has hung up.");
   }
-  check(r, "recvmsg");
+  ccheck(r, "recvmsg");
 
   for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg.msg); cmsg; cmsg = CMSG_NXTHDR(&msg.msg, cmsg)) {
     if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
@@ -278,8 +215,9 @@ StatusOr<int> IPC<M>::receive_fd(bool block) {
 template <typename M>
 void IPC<M>::make_connection() {
   if (am_server_) {
+    fprintf(stderr, "Making server connection.\n");
     socket_ = accept(listen_socket_, nullptr, nullptr);
-    check(socket_, "accept");
+    ccheck(socket_, "accept");
     connected_ = true;
   }
 }
@@ -314,6 +252,7 @@ IPC<M>::IPC(IPC&& other) noexcept
     socket_path_(std::move(other.socket_path_)) {
   other.listen_socket_ = -1;
   other.socket_ = -1;
+  other.connected_ = false;
   other.socket_path_.clear();
 }
 
@@ -338,6 +277,7 @@ IPC<M>& IPC<M>::operator=(IPC&& other) noexcept {
     // Reset other
     other.listen_socket_ = -1;
     other.socket_ = -1;
+    other.connected_ = false;
     other.socket_path_.clear();
   }
   return *this;

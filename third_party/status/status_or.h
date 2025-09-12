@@ -27,6 +27,7 @@
 #include <type_traits>
 
 #include "logger.h"
+#include "stack_trace.h"
 
 enum class StatusCode {
   OK = 0,
@@ -70,7 +71,9 @@ inline std::ostream& operator<<(std::ostream& os, StatusCode code) {
 
 class StatusVal {
  public:
-  explicit StatusVal(StatusCode code, std::string msg = "") : code_(code), msg_(msg) {}
+  explicit StatusVal(StatusCode code, std::string msg = "") : code_(code), msg_(msg) {
+    stack_trace_ = get_backtrace(/*skip_frames=*/2);
+  }
 
   bool ok() const { return code_ == StatusCode::OK; }
   StatusCode code() const { return code_; }
@@ -83,13 +86,18 @@ class StatusVal {
     if (msg_.size()) {
       str += ": " + msg_;
     }
+    str += "\n";
+    str += stack_trace_;
     return str;
   }
 
  private:
   StatusCode code_ = StatusCode::OK;
   std::string msg_ = "";
+  std::string stack_trace_;
 };
+
+inline std::string to_string(const StatusVal& s) { return s.to_string(); }
 
 inline std::ostream& operator<<(std::ostream& os, const StatusVal& status) {
   os << status.to_string();
@@ -193,6 +201,14 @@ class StatusOr {
     return value_;
   }
 
+  std::string to_string() {
+    if (has_value()) {
+      return "StatusOr Value to_string Not Implemented.";
+    } else {
+      return status().to_string();
+    }
+  }
+
  private:
   bool has_value() const { return ok(); }
 
@@ -201,6 +217,9 @@ class StatusOr {
     T value_;
   };
 };
+
+template <typename T>
+std::string to_string(StatusOr<T> v) { return v.to_string(); }
 
 inline StatusVal get_status_(StatusVal s) { return s; }
 
@@ -227,5 +246,17 @@ StatusVal get_status_(StatusOr<T> s) {
   auto var = rhs;                            \
   if (!var.ok()) return var.status();        \
   lhs = std::move(var.value());
+
+#define CHECK(v)               \
+  if (!(v)) {                  \
+    ERROR(get_backtrace());    \
+    exit(1);                   \
+  }
+
+#define CHECK_OK(v)         \
+  if (!v.ok()) {            \
+    ERROR(get_backtrace()); \
+    exit(1);                \
+  }
 
 #endif  // STATUS_OR_H_

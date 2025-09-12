@@ -2,7 +2,11 @@ project('bouncedesk', 'cpp',
   version : '0.1.0',
   default_options : ['cpp_std=c++20',
                      'cpp_eh=none',
-                     'cpp_rtti=false'])
+                     'cpp_rtti=false',
+                     'warning_level=3',
+                     'werror=true'])
+
+add_project_arguments('-Wshadow', language : 'cpp')
 
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
@@ -29,7 +33,8 @@ client_test = executable('client_test',
 
 reaper_sources = [
   'reaper/reaper.cpp',
-  'reaper/impl.cpp'
+  'reaper/impl.cpp',
+  'reaper/cleanup.cpp'
 ]
 
 reaper = executable('reaper',

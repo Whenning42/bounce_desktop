@@ -1,5 +1,5 @@
-#ifndef REAPER_REAPER_
-#define REAPER_REAPER_
+#ifndef REAPER_REAPER_H_
+#define REAPER_REAPER_H_
 
 #include <chrono>
 #include <string>
@@ -25,13 +25,11 @@ class Reaper {
   // stdin/stdout redirection for processes running under the reaper.
   StatusOr<int> launch();
 
-  // Request that the process manager listening to 'ipc_file' clean up all of
-  // its descendants and block until 'ipc_file' is updated with the cleanup
-  // confirmation.
-  //
-  // Returns DEADLINE_EXCEEDED if the cleanup doesn't finish before the timeout.
-  StatusVal clean_up(
-      std::chrono::nanoseconds timeout = std::chrono::seconds(1));
+  // Request that the reaper stop all of its descendants and then report back
+  // once its finished. Returns true if the cleanup succeeds and false if the
+  // reaper exited under unknown circumstances. If so, check the launcher
+  // and reaper log for more details.
+  bool clean_up();
 
  private:
   std::string command_;

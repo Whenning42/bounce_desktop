@@ -36,6 +36,7 @@ inline std::mutex mu;
 inline int fd = STDOUT_FILENO;
 
 inline void log(const char* channel, const char* fmt, ...) {
+  (void)channel;
   va_list args;
   va_start(args, fmt);
 
@@ -83,9 +84,16 @@ inline void log(const char* channel, const char* fmt, ...) {
 
   va_end(args);
 }
+
+inline void log(const char* channel, const std::string& s) { return log(channel, s.c_str()); }
+
 }  // namespace logger
 
 #define LOG(...) ::logger::log(__VA_ARGS__)
 #define ERROR(...) ::logger::log(kLogError, __VA_ARGS__)
+
+#define FATAL(...)    \
+  ERROR(__VA_ARGS__); \
+  exit(1);
 
 #endif  // LOGGER_H_

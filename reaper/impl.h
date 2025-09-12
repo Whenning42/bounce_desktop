@@ -12,13 +12,41 @@
 #include "reaper/ipc.h"
 #include "reaper/protocol.h"
 
-struct Files {
-  int parent_fd = -1;
-  int sigchld_fd = -1;
-  void cleanup() {
-    if (parent_fd != -1) close(parent_fd);
-    if (sigchld_fd != -1) close(sigchld_fd);
+class OwnedFds {
+ public:
+  OwnedFds() = default;
+  OwnedFds(int parent_fd, int sigchld_fd)
+      : parent_fd_(parent_fd), sigchld_fd_(sigchld_fd) {}
+  ~OwnedFds() {
+    if (parent_fd_ != -1) close(parent_fd_);
+    if (sigchld_fd_ != -1) close(sigchld_fd_);
   }
+
+  // Delete copies.
+  OwnedFds(const OwnedFds&) = delete;
+  OwnedFds& operator=(const OwnedFds&) = delete;
+
+  // Expected move operators.
+  OwnedFds(OwnedFds&& other) noexcept
+      : parent_fd_(other.parent_fd_), sigchld_fd_(other.sigchld_fd_) {
+    other.parent_fd_ = -1;
+    other.sigchld_fd_ = -1;
+  }
+  OwnedFds& operator=(OwnedFds&& other) noexcept {
+    if (this != &other) {
+      if (parent_fd_ != -1) close(parent_fd_);
+      if (sigchld_fd_ != -1) close(sigchld_fd_);
+      parent_fd_ = other.parent_fd_;
+      sigchld_fd_ = other.sigchld_fd_;
+      other.parent_fd_ = -1;
+      other.sigchld_fd_ = -1;
+    }
+    return *this;
+  }
+
+ private:
+  int parent_fd_ = -1;
+  int sigchld_fd_ = -1;
 };
 
 class ReaperImpl {
@@ -40,16 +68,13 @@ class ReaperImpl {
   // clean_up.
   void on_exit();
 
-  // Reap any zombie children.
-  void on_sigchld();
-
  private:
   void setup_signal_handlers();
 
   std::string command_;
   Token token_;
   IPC<ReaperMessage> ipc_;
-  Files files_;
+  OwnedFds owned_files_;
 };
 
 #endif

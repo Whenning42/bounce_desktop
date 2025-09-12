@@ -42,6 +42,8 @@ class IPC {
   // Clean up socket file from client side (when server has died)
   void cleanup_from_client();
 
+  bool connected() const { return connected_; }
+
  private:
   void make_connection();
   void set_blocking(bool blocking);

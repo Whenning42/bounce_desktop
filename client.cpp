@@ -20,10 +20,11 @@
 
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
     int32_t port, ConnectionOptions options) {
+  (void)port;
   auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
   client->vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, client.get());
   client->connection_options_ = std::move(options);
-  return std::move(client);
+  return client;
 }
 
 void BounceDeskClient::resize(int width, int height) {
@@ -90,6 +91,7 @@ void rfb_client_log(const char* fmt, ...) {
 
 rfbCredential* unexpected_credential_error(rfbClient* client,
                                            int credential_type) {
+  (void)client;
   ERROR("Asked for credential of type: %d", credential_type);
   exit(1);
 }
