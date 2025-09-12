@@ -23,15 +23,18 @@ void log_error(T v) {
 }
 }  // namespace
 
-StatusOr<int> Reaper::launch() {
+StatusOr<Reaper> Reaper::create(const std::string& command,
+                                const std::string& ipc_dir) {
   // Open the IPC connection.
   Token token;
-  ASSIGN_OR_RETURN(ipc_, IPC<ReaperMessage>::create(ipc_dir_, &token));
+  ASSIGN_OR_RETURN(auto ipc, IPC<ReaperMessage>::create(ipc_dir, &token));
+  return Reaper(command, ipc_dir, std::move(ipc), std::move(token));
+}
 
+StatusOr<int> Reaper::launch() {
   // Launch the reaper.
   EnvVars env = EnvVars::environ();
-  env.add_var(kReaperIpcFileEnvVar, token.c_str());
-  // Throwing EFAULT?
+  env.add_var(kReaperIpcFileEnvVar, ipc_token_.c_str());
   ASSIGN_OR_RETURN(int pid, launch_process({"./build/reaper", command_}, &env));
 
   // Open this process's pidfd to send to the reaper as the reaper's parent.
@@ -48,7 +51,8 @@ StatusOr<int> Reaper::launch() {
 
   // Verify launch ran successfully.
   ASSIGN_OR_RETURN(ReaperMessage message, ipc_.receive());
-  fprintf(stderr, "Launcher connected at state receive: %d\n", ipc_.connected());
+  fprintf(stderr, "Launcher connected at state receive: %d\n",
+          ipc_.connected());
   if (message.code != ReaperMessageCode::FINISHED_LAUNCH) {
     return InvalidArgumentError("Reaper failed to launch the subcommand");
   }
@@ -56,7 +60,8 @@ StatusOr<int> Reaper::launch() {
 }
 
 bool Reaper::clean_up() {
-  fprintf(stderr, "Launcher connected at clean up receive: %d\n", ipc_.connected());
+  fprintf(stderr, "Launcher connected at clean up receive: %d\n",
+          ipc_.connected());
   StatusOr<ReaperMessage> r = ipc_.receive(/*blocking=*/false);
   if (!r.ok() && r.status().code() != StatusCode::UNAVAILABLE) {
     log_error(r);

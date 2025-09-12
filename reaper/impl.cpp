@@ -66,9 +66,13 @@ void set_child_subreaper() {
 void exit_handler(int) { global_impl->on_exit(); }
 }  // namespace
 
-void ReaperImpl::run() {
-  ipc_ = std::move(IPC<ReaperMessage>::connect(token_).value_or_die());
+StatusOr<ReaperImpl> ReaperImpl::create(const std::string& command,
+                                        const Token& token) {
+  ASSIGN_OR_RETURN(auto ipc, IPC<ReaperMessage>::connect(token));
+  return ReaperImpl(command, token, std::move(ipc));
+}
 
+void ReaperImpl::run() {
   set_child_subreaper();
   setup_signal_handlers();
   int sigchld_signalfd = make_sigchld_signalfd_and_block_signal();

@@ -19,6 +19,7 @@ class WaylandBackend : public Backend {
   // Starts a Weston vnc backed server.
   static StatusOr<std::unique_ptr<WaylandBackend>> start_server(
       int32_t port, int32_t width, int32_t height, const std::string& command);
+
   ~WaylandBackend() override {
     printf("Requesting cleanup\n");
     if (reaper_) {
@@ -27,9 +28,10 @@ class WaylandBackend : public Backend {
   }
 
  private:
-  WaylandBackend(std::shared_ptr<reaper::Reaper> reaper) : reaper_(reaper) {}
+  WaylandBackend(std::unique_ptr<reaper::Reaper> reaper)
+      : reaper_(std::move(reaper)) {}
 
-  std::shared_ptr<reaper::Reaper> reaper_;
+  std::unique_ptr<reaper::Reaper> reaper_;
 };
 
 #endif

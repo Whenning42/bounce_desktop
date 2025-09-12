@@ -256,32 +256,6 @@ IPC<M>::IPC(IPC&& other) noexcept
   other.socket_path_.clear();
 }
 
-template <typename M>
-IPC<M>& IPC<M>::operator=(IPC&& other) noexcept {
-  if (this != &other) {
-    // Clean up current resources
-    if (listen_socket_ != -1) close(listen_socket_);
-    if (socket_ != -1) close(socket_);
-    if (am_server_ && !socket_path_.empty()) {
-      unlink(socket_path_.c_str());
-    }
-    
-    // Move from other
-    am_server_ = other.am_server_;
-    connected_ = other.connected_;
-    listen_socket_ = other.listen_socket_;
-    socket_ = other.socket_;
-    blocking_ = other.blocking_;
-    socket_path_ = std::move(other.socket_path_);
-    
-    // Reset other
-    other.listen_socket_ = -1;
-    other.socket_ = -1;
-    other.connected_ = false;
-    other.socket_path_.clear();
-  }
-  return *this;
-}
 
 template <typename M>
 IPC<M>::~IPC() {

@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  ReaperImpl p = ReaperImpl(command, Token(ipc_token_var));
-  p.run();
+  StatusOr<ReaperImpl> p = ReaperImpl::create(command, Token(ipc_token_var));
+  CHECK_OK(p);
+  p->run();
 }

@@ -39,7 +39,8 @@ reaper::Reaper run_reaper_ptree(const std::string& args,
                                 const std::string& ipc_dir,
                                 int* pid = nullptr) {
   std::string command = "python3 ./reaper/tests/reaper_ptree.py " + args;
-  reaper::Reaper reaper(command, ipc_dir);
+  reaper::Reaper reaper =
+      std::move(reaper::Reaper::create(command, ipc_dir).value_or_die());
   int r = reaper.launch().value_or_die();
   if (pid) *pid = r;
 
@@ -180,7 +181,9 @@ TEST_F(ReaperTest, ParentExitTest) {
 }
 
 TEST_F(ReaperTest, InvalidCommandError) {
-  reaper::Reaper reaper("/nonexistent/command/that/should/fail", ipc_dir_);
+  reaper::Reaper reaper = std::move(
+      reaper::Reaper::create("/nonexistent/command/that/should/fail", ipc_dir_)
+          .value_or_die());
   StatusOr<int> result = reaper.launch();
 
   EXPECT_THAT(result, StatusIs(StatusCode::INVALID_ARGUMENT));

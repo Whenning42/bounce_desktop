@@ -42,9 +42,12 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
       port_str, width_str, height_str, command);
 
   // Create reaper instance and launch
-  auto reaper = std::make_shared<reaper::Reaper>(
-      weston_command, std::filesystem::path(ipc_file).parent_path().string());
-  RETURN_IF_ERROR(reaper->launch());
+  ASSIGN_OR_RETURN(auto reaper,
+                   reaper::Reaper::create(
+                       weston_command,
+                       std::filesystem::path(ipc_file).parent_path().string()));
+  RETURN_IF_ERROR(reaper.launch());
 
-  return std::unique_ptr<WaylandBackend>(new WaylandBackend(reaper));
+  return std::unique_ptr<WaylandBackend>(
+      new WaylandBackend(std::make_unique<reaper::Reaper>(std::move(reaper))));
 }

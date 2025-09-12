@@ -12,20 +12,15 @@ using Token = std::string;
 template <typename M>
 class IPC {
  public:
-  // Default constructor
-  IPC() = default;
+  // Allow moves, disallow default construction, copies, and assignment.
+  IPC(IPC&& other) noexcept;
+  IPC& operator=(IPC&& other) = delete;
+  IPC& operator=(const IPC&) = delete;
+  IPC(const IPC&) = delete;
+  ~IPC();
 
   static StatusOr<IPC> create(const std::string& dir, Token* token);
   static StatusOr<IPC> connect(const Token& token);
-  ~IPC();
-
-  // Move constructor and assignment
-  IPC(IPC&& other) noexcept;
-  IPC& operator=(IPC&& other) noexcept;
-
-  // Delete copy constructor and assignment
-  IPC(const IPC&) = delete;
-  IPC& operator=(const IPC&) = delete;
 
   StatusVal send(const M& m);
   StatusVal send_fd(int fd);
@@ -45,6 +40,7 @@ class IPC {
   bool connected() const { return connected_; }
 
  private:
+  IPC() = default;
   void make_connection();
   void set_blocking(bool blocking);
 

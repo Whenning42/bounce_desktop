@@ -12,26 +12,41 @@ namespace reaper {
 
 class Reaper {
  public:
-  Reaper(const std::string& command, const std::string& ipc_dir)
-      : command_(command), ipc_dir_(ipc_dir) {}
+  // Create a Reaper instance with the given command and IPC directory.
+  static StatusOr<Reaper> create(const std::string& command,
+                                 const std::string& ipc_dir);
 
-  // Runs the given 'command' in a process manager reaper.
-  // 'ipc_file' is a file the process manager will listen to for cleanup
-  // requests. Returns the PID of the launched reaper process once it has
-  // started 'command'. Returns INVALID_ARGUMENT if the reaper can't launch
-  // 'command'.
+  // Disallow default construction, copying and assignment
+  Reaper() = delete;
+  Reaper(const Reaper&) = delete;
+  Reaper& operator=(const Reaper&) = delete;
+
+  // Allow moving
+  Reaper(Reaper&&) = default;
+  Reaper& operator=(Reaper&&) = default;
+
+  // Runs the given 'command' under the reaper.
   //
-  // This function can be extended with optional arguments to support
-  // stdin/stdout redirection for processes running under the reaper.
+  // Returns an INVALID_ARGUMENT error if the process fails to launch, or if it
+  // exits quickly after launching.
   StatusOr<int> launch();
 
-  // Request that the reaper stop all of its descendants and then report back
-  // once its finished. Returns true if the cleanup succeeds and false if the
-  // reaper exited under unknown circumstances. If so, check the launcher
-  // and reaper log for more details.
+  // Requests that the reqper stop all of its descendants and waits for a
+  // confirmation from the reaper that is succeeded.
+  //
+  // Returns 'false' if the launcher's unable to receive a confirmation from the
+  // reaper that the shutdown happened successfully. In this case, processes
+  // will still have been reaped as long as the reaper hasn't crashed or been
+  // sigkilled.
   bool clean_up();
 
  private:
+  Reaper(const std::string& command, const std::string& ipc_dir,
+         IPC<ReaperMessage> ipc, Token token)
+      : command_(command),
+        ipc_dir_(ipc_dir),
+        ipc_(std::move(ipc)),
+        ipc_token_(std::move(token)) {}
   std::string command_;
   std::string ipc_dir_;
   IPC<ReaperMessage> ipc_;

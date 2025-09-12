@@ -51,11 +51,18 @@ class OwnedFds {
 
 class ReaperImpl {
  public:
-  // Launch the reaper with the given 'command' running under it.
-  // Use 'token' to connect to IPC, report launch results and receive cleanup
-  // requests. Blocks until the process manager exits.
-  ReaperImpl(const std::string& command, const Token& token)
-      : command_(command), token_(token) {}
+  // Create a ReaperImpl instance with the given command and token.
+  static StatusOr<ReaperImpl> create(const std::string& command,
+                                     const Token& token);
+
+  // Disallow default construction, copying and assignment
+  ReaperImpl() = delete;
+  ReaperImpl(const ReaperImpl&) = delete;
+  ReaperImpl& operator=(const ReaperImpl&) = delete;
+
+  // Allow moving
+  ReaperImpl(ReaperImpl&&) = default;
+  ReaperImpl& operator=(ReaperImpl&&) = default;
 
   // Run the reaper's main loop. Start by launching the 'command' given in the
   // constructor. Then poll for any reapable children, changes to ipc_file, or
@@ -69,6 +76,9 @@ class ReaperImpl {
   void on_exit();
 
  private:
+  ReaperImpl(const std::string& command, const Token& token,
+             IPC<ReaperMessage> ipc)
+      : command_(command), token_(token), ipc_(std::move(ipc)) {}
   void setup_signal_handlers();
 
   std::string command_;

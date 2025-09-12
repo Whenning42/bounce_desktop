@@ -21,9 +21,10 @@ int main(int argc, char* argv[]) {
   std::string ipc_dir = argv[1];
 
   // Create reaper and launch the ptree command
-  reaper::Reaper reaper("python3 ./reaper/tests/reaper_ptree.py -1 -1",
-                        ipc_dir);
-  StatusOr<int> result = reaper.launch();
+  StatusOr<reaper::Reaper> reaper = reaper::Reaper::create(
+      "python3 ./reaper/tests/reaper_ptree.py -1 -1", ipc_dir);
+  CHECK_OK(reaper);
+  StatusOr<int> result = reaper->launch();
   if (!result.ok()) {
     ERROR("Failed to launch the reaper: %s",
           result.status().to_string().c_str());
