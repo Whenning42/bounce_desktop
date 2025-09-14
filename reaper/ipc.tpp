@@ -1,29 +1,27 @@
 #define REAPER_IPC_TPP_
 
-#include "reaper/ipc.h"
-
+#include <cxxabi.h>
+#include <dlfcn.h>
+#include <execinfo.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <cassert>
-#include <format>
-#include <filesystem>
-#include <random>
-#include <sstream>
+#include <limits.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
 
-#include <execinfo.h>
-#include <dlfcn.h>
-#include <cxxabi.h>
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <format>
+#include <random>
+#include <sstream>
 #include <string>
-#include <unistd.h>
-#include <limits.h>
-#include <stdint.h>
 
-#include "reaper/libc_error.h"
+#include "libc_error.h"
+#include "reaper/ipc.h"
 #include "third_party/status/status_or.h"
 
 namespace {
@@ -55,7 +53,7 @@ std::string get_likely_available_path(const std::string& dir) {
     std::stringstream hex;
     hex << std::hex << v;
     path = d / std::format("bounce_ipc_socket_{}", hex.str());
-        if (!std::filesystem::exists(path)) break;
+    if (!std::filesystem::exists(path)) break;
   }
   return path;
 }
@@ -81,9 +79,9 @@ struct CMessage {
   char control[CMSG_SPACE(sizeof(int))];
   char iobuf[1];
   struct iovec iov;
-  
+
   CMessage(int fd) {
-    iov = iovec{ .iov_base = iobuf, .iov_len = sizeof(iobuf) };
+    iov = iovec{.iov_base = iobuf, .iov_len = sizeof(iobuf)};
 
     memset(control, 0, sizeof(control));
     msg.msg_iov = &iov;
@@ -91,10 +89,10 @@ struct CMessage {
     msg.msg_control = control;
     msg.msg_controllen = sizeof(control);
 
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
     cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type  = SCM_RIGHTS;
-    cmsg->cmsg_len   = CMSG_LEN(sizeof(int));
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
     memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
   }
 };
@@ -106,7 +104,7 @@ void set_fd_blocking(int fd, bool blocking) {
   flags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
   ccheck(fcntl(fd, F_SETFL, flags), "fcntl set flags");
 }
-}
+}  // namespace
 
 template <typename M>
 StatusOr<IPC<M>> IPC<M>::create(const std::string& dir, Token* token) {
@@ -130,7 +128,8 @@ StatusOr<IPC<M>> IPC<M>::connect(const Token& token) {
   ipc.socket_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
   ccheck(ipc.socket_, "connect socket");
   sockaddr_un addr = make_addr_un(token.c_str());
-  ccheck(::connect(ipc.socket_, (sockaddr*)&addr, sizeof(sockaddr_un)), "connect");
+  ccheck(::connect(ipc.socket_, (sockaddr*)&addr, sizeof(sockaddr_un)),
+         "connect");
   return ipc;
 }
 
@@ -183,7 +182,8 @@ StatusOr<M> IPC<M>::receive(bool block) {
   if (r < (int)sizeof(m)) {
     size_t expected = sizeof(m);
     int actual = r;
-    return InternalError(std::format("Unexpected read size. Expected: {}, actual {}", expected, actual));
+    return InternalError(std::format(
+        "Unexpected read size. Expected: {}, actual {}", expected, actual));
   }
 
   return m;
@@ -204,12 +204,14 @@ StatusOr<int> IPC<M>::receive_fd(bool block) {
   }
   ccheck(r, "recvmsg");
 
-  for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg.msg); cmsg; cmsg = CMSG_NXTHDR(&msg.msg, cmsg)) {
+  for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg.msg); cmsg;
+       cmsg = CMSG_NXTHDR(&msg.msg, cmsg)) {
     if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
       return *(int*)CMSG_DATA(cmsg);
     }
   }
-  return InvalidArgumentError("Couldn't find a file descriptor in recvmsg ancillary data.");
+  return InvalidArgumentError(
+      "Couldn't find a file descriptor in recvmsg ancillary data.");
 }
 
 template <typename M>
@@ -244,18 +246,17 @@ void IPC<M>::cleanup_from_client() {
 
 template <typename M>
 IPC<M>::IPC(IPC&& other) noexcept
-  : am_server_(other.am_server_),
-    connected_(other.connected_),
-    listen_socket_(other.listen_socket_),
-    socket_(other.socket_),
-    blocking_(other.blocking_),
-    socket_path_(std::move(other.socket_path_)) {
+    : am_server_(other.am_server_),
+      connected_(other.connected_),
+      listen_socket_(other.listen_socket_),
+      socket_(other.socket_),
+      blocking_(other.blocking_),
+      socket_path_(std::move(other.socket_path_)) {
   other.listen_socket_ = -1;
   other.socket_ = -1;
   other.connected_ = false;
   other.socket_path_.clear();
 }
-
 
 template <typename M>
 IPC<M>::~IPC() {
@@ -263,7 +264,7 @@ IPC<M>::~IPC() {
   if (socket_ != -1) {
     close(socket_);
   }
-  
+
   if (am_server_ && !socket_path_.empty()) {
     unlink(socket_path_.c_str());
   }

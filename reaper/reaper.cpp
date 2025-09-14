@@ -8,8 +8,8 @@
 #include <cstring>
 #include <fstream>
 
+#include "process.h"
 #include "reaper/ipc.h"
-#include "reaper/process.h"
 
 namespace reaper {
 namespace {
@@ -35,7 +35,8 @@ StatusOr<int> Reaper::launch() {
   // Launch the reaper.
   EnvVars env = EnvVars::environ();
   env.add_var(kReaperIpcFileEnvVar, ipc_token_.c_str());
-  ASSIGN_OR_RETURN(int pid, launch_process({"./build/reaper", command_}, &env));
+  ASSIGN_OR_RETURN(Process p,
+                   launch_process({"./build/reaper", command_}, &env));
 
   // Open this process's pidfd to send to the reaper as the reaper's parent.
   int pidfd = syscall(SYS_pidfd_open, getpid(), 0);
@@ -56,7 +57,7 @@ StatusOr<int> Reaper::launch() {
   if (message.code != ReaperMessageCode::FINISHED_LAUNCH) {
     return InvalidArgumentError("Reaper failed to launch the subcommand");
   }
-  return pid;
+  return p.pid;
 }
 
 bool Reaper::clean_up() {

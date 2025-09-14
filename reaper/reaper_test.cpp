@@ -13,15 +13,15 @@
 #include <string>
 #include <thread>
 
+#include "process.h"
 #include "reaper/ipc.h"
-#include "reaper/process.h"
 
 namespace {
 
-using std::this_thread::sleep_for;
-using std::chrono::steady_clock;
 using std::chrono::milliseconds;
 using std::chrono::nanoseconds;
+using std::chrono::steady_clock;
+using std::this_thread::sleep_for;
 
 MATCHER_P(StatusIs, code, "") { return get_status_(arg).code() == code; }
 
@@ -146,8 +146,8 @@ TEST_F(ReaperTest, SigintExitTest) {
   send_sigint(reaper_pid);
 
   EXPECT_ptree_is_cleaned_up();
-  // WHen reaper exits via a signal, we can't guarantee a clean clean-up. but clean-up
-  // should proceed without any fatal errors.
+  // When reaper exits via a signal, we can't guarantee a clean clean-up. but
+  // clean-up should proceed without any fatal errors.
   reaper.clean_up();
 }
 
@@ -158,8 +158,8 @@ TEST_F(ReaperTest, SigtermExitTest) {
   send_sigterm(reaper_pid);
 
   EXPECT_ptree_is_cleaned_up();
-  // WHen reaper exits via a signal, we can't guarantee a clean clean-up. but clean-up
-  // should proceed without any fatal errors.
+  // When reaper exits via a signal, we can't guarantee a clean clean-up. but
+  // clean-up should proceed without any fatal errors.
   reaper.clean_up();
 }
 
@@ -171,7 +171,8 @@ TEST_F(ReaperTest, CleanupExitTest) {
 
 TEST_F(ReaperTest, ParentExitTest) {
   int pid = launch_process({"./build/reaper_tests_reaper_parent", ipc_dir_})
-                .value_or_die();
+                .value_or_die()
+                .pid;
 
   int status;
   waitpid(pid, &status, 0);

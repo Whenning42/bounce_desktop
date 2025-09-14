@@ -19,12 +19,11 @@
 #include <thread>
 #include <vector>
 
-#include "reaper/ipc.h"
-#include "reaper/process.h"
-#include "reaper/protocol.h"
+#include "process.h"
 #include "reaper/cleanup.h"
+#include "reaper/ipc.h"
+#include "reaper/protocol.h"
 #include "third_party/status/logger.h"
-
 
 bool parent_died = false;
 ReaperImpl* global_impl = nullptr;
@@ -79,10 +78,10 @@ void ReaperImpl::run() {
   int parent_pidfd = ipc_.receive_fd().value_or_die();
   owned_files_ = OwnedFds(parent_pidfd, sigchld_signalfd);
 
-  StatusOr<int> pid = launch_process({"sh", "-c", command_});
-  if (!pid.ok()) {
+  StatusOr<Process> p = launch_process({"sh", "-c", command_});
+  if (!p.ok()) {
     ipc_.send(ReaperMessage{ReaperMessageCode::INVALID_COMMAND});
-    ERROR(pid.to_string());
+    ERROR(p.to_string());
     return;
   }
 
@@ -91,7 +90,7 @@ void ReaperImpl::run() {
   // INVALID_COMMAND value.
   sleep_for(milliseconds(20));
   int stat;
-  int wait_pid = waitpid(*pid, &stat, WNOHANG);
+  int wait_pid = waitpid(p->pid, &stat, WNOHANG);
   if (wait_pid != 0 && stat != 0) {
     ipc_.send(ReaperMessage{ReaperMessageCode::INVALID_COMMAND});
     ERROR("Launched program exited shortly after launch.");
@@ -103,9 +102,12 @@ void ReaperImpl::run() {
   CHECK_OK(ipc_.send(success_msg));
 
   pollfd poll_fds[kNumPolls];
-  poll_fds[kParentIdx] = pollfd{.fd = parent_pidfd, .events = POLLIN, .revents = 0};
-  poll_fds[kIpcIdx] = pollfd{.fd = ipc_.socket(), .events = POLLIN, .revents = 0};
-  poll_fds[kSigchldIdx] = pollfd{.fd = sigchld_signalfd, .events = POLLIN, .revents = 0};
+  poll_fds[kParentIdx] =
+      pollfd{.fd = parent_pidfd, .events = POLLIN, .revents = 0};
+  poll_fds[kIpcIdx] =
+      pollfd{.fd = ipc_.socket(), .events = POLLIN, .revents = 0};
+  poll_fds[kSigchldIdx] =
+      pollfd{.fd = sigchld_signalfd, .events = POLLIN, .revents = 0};
 
   while (true) {
     int r = poll(poll_fds, kNumPolls, -1);

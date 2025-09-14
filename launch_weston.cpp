@@ -1,0 +1,105 @@
+#include "launch_weston.h"
+
+#include <fcntl.h>
+
+#include <fstream>
+#include <sstream>
+#include <thread>
+
+#include "process.h"
+
+namespace {
+void set_fd_nonblocking(int fd) {
+  if (fd < 0) return;
+  int flags = fcntl(fd, F_GETFL, 0);
+  CHECK(flags != -1);
+  flags = flags | O_NONBLOCK;
+  CHECK(fcntl(fd, F_SETFL, flags) != -1);
+}
+
+bool read_fd(int fd, std::string* out) {
+  char buf[1024];
+  int r = read(fd, buf, 1023);
+  if (r == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    perror("run weston read");
+    return false;
+  }
+  buf[r] = '\0';
+  *out += std::string(buf);
+  return true;
+}
+
+bool has_child(int pid) {
+  const std::string path = std::format("/proc/{}/task/{}/children", pid, pid);
+  std::ifstream file(path);
+  if (!file) {
+    return false;
+  }
+
+  std::stringstream r;
+  r << file.rdbuf();
+  return !r.str().empty();
+}
+
+StatusVal search_for_error(const std::string& out) {
+  const std::string kCompositorFailed =
+      "fatal: failed to create compositor backend";
+  const std::string kWaylandPipeFailed =
+      "Failed to process Wayland connection: Broken pipe";
+  const std::string kDisplayPipeFailed =
+      "failed to create display: Broken pipe";
+
+  if (out.find(kCompositorFailed) != std::string::npos) {
+    return UnavailableError("Port already in use.");
+  }
+  if (out.find(kWaylandPipeFailed) != std::string::npos) {
+    return UnknownError(
+        "Weston launch failed with to process the wayland connection because "
+        "of a broken pipe.");
+  }
+  if (out.find(kDisplayPipeFailed) != std::string::npos) {
+    return UnknownError(
+        "Weston launch failed to create display because of a broken pipe.");
+  }
+  return OkStatus();
+}
+}  // namespace
+
+StatusOr<int> run_weston(int port, const std::vector<std::string>& command) {
+  // TODO: Figure out how to distribute or upstream our authentication
+  // change.
+  setenv("LD_LIBRARY_PATH", "/usr/local/lib", true);
+
+  std::vector<std::string> weston_command = {
+      "weston",
+      "--xwayland",
+      "--backend=vnc",
+      "--disable-transport-layer-security",
+      std::format("--port={}", port),
+      "--"};
+  weston_command.insert(weston_command.end(), command.begin(), command.end());
+
+  ASSIGN_OR_RETURN(Process p, launch_process(weston_command, /*env=*/nullptr,
+                                             /*stdout=*/ProcessOut::PIPE,
+                                             /*stderr=*/ProcessOut::STDOUT));
+  auto start = std::chrono::steady_clock::now();
+  auto timeout = std::chrono::milliseconds(1000);
+  std::string output;
+  set_fd_nonblocking(p.stdout_pipe);
+  while (std::chrono::steady_clock::now() - start < timeout) {
+    read_fd(p.stdout_pipe, &output);
+    RETURN_IF_ERROR(search_for_error(output));
+    if (has_child(p.pid)) {
+      return p.pid;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  return UnknownError(
+      "run_weston() never found weston's child. Maybe the command exited "
+      "without weston reporting a failure, weston is hanging, or the "
+      "executed command ran as a daemon. run_weston() verifies that weston "
+      "successfully launched a child in a poll loop and so to correctly handle "
+      "quickly exiting daemons, consider running them under a child "
+      "subreaper.");
+}

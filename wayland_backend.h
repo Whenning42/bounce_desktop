@@ -6,32 +6,21 @@
 #include <string>
 
 #include "backend.h"
-#include "reaper/reaper.h"
 #include "third_party/status/status_or.h"
-#include "third_party/subprocess/subprocess.h"
 
 class WaylandBackend : public Backend {
  public:
-  // TODO: Improve process cleanup. Stopping the weston subprocess doesn't stop
-  // its child log_displays.sh process which blocks attempts to start another
-  // server on the same port.
-
-  // Starts a Weston vnc backed server.
   static StatusOr<std::unique_ptr<WaylandBackend>> start_server(
       int32_t port, int32_t width, int32_t height, const std::string& command);
 
-  ~WaylandBackend() override {
-    printf("Requesting cleanup\n");
-    if (reaper_) {
-      reaper_->clean_up();
-    }
-  }
+  ~WaylandBackend() override;
 
  private:
-  WaylandBackend(std::unique_ptr<reaper::Reaper> reaper)
-      : reaper_(std::move(reaper)) {}
+  WaylandBackend(const std::string& instance_name, int pid)
+      : instance_name_(instance_name), pid_(pid) {}
 
-  std::unique_ptr<reaper::Reaper> reaper_;
+  std::string instance_name_;
+  int pid_;
 };
 
 #endif
