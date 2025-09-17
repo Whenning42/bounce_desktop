@@ -18,7 +18,9 @@ bouncedesk_sources = [
   'client.cpp',
   'wayland_backend.cpp',
   'reaper/reaper.cpp',
-  'process.cpp'
+  'process.cpp',
+  'display_vars.cpp',
+  'launch_weston.cpp'
 ]
 
 if fs.exists('bdisplay_manager.cpp')
@@ -42,7 +44,7 @@ reaper_sources = [
   'reaper/reaper.cpp',
   'reaper/impl.cpp',
   'reaper/cleanup.cpp',
-  'process.cpp'
+  'process.cpp',
 ]
 
 reaper = executable('reaper',

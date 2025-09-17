@@ -65,7 +65,8 @@ StatusVal search_for_error(const std::string& out) {
 }
 }  // namespace
 
-StatusOr<int> run_weston(int port, const std::vector<std::string>& command) {
+StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
+                         int width, int height) {
   // TODO: Figure out how to distribute or upstream our authentication
   // change.
   setenv("LD_LIBRARY_PATH", "/usr/local/lib", true);
@@ -75,6 +76,8 @@ StatusOr<int> run_weston(int port, const std::vector<std::string>& command) {
       "--xwayland",
       "--backend=vnc",
       "--disable-transport-layer-security",
+      std::format("--width={}", width),
+      std::format("--height={}", height),
       std::format("--port={}", port),
       "--"};
   weston_command.insert(weston_command.end(), command.begin(), command.end());

@@ -18,6 +18,7 @@
 // Returns:
 //  - UNAVAILABLE_ERROR if the chosen port is taken.
 //  - UNKNOWN_ERROR if weston fails with any non-port related error.
-StatusOr<int> run_weston(int port, const std::vector<std::string>& command);
+StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
+                         int width = 800, int height = 600);
 
 #endif
