@@ -71,7 +71,8 @@ inline std::ostream& operator<<(std::ostream& os, StatusCode code) {
 
 class StatusVal {
  public:
-  explicit StatusVal(StatusCode code, std::string msg = "") : code_(code), msg_(msg) {
+  explicit StatusVal(StatusCode code, std::string msg = "")
+      : code_(code), msg_(msg) {
     stack_trace_ = get_backtrace(/*skip_frames=*/2);
   }
 
@@ -104,16 +105,30 @@ inline std::ostream& operator<<(std::ostream& os, const StatusVal& status) {
   return os;
 }
 
-inline StatusVal OkStatus(std::string msg="") { return StatusVal(StatusCode::OK, msg); }
-inline StatusVal UnknownError(std::string msg="") { return StatusVal(StatusCode::UNKNOWN, msg); }
-inline StatusVal InvalidArgumentError(std::string msg="") { return StatusVal(StatusCode::INVALID_ARGUMENT, msg); }
-inline StatusVal DeadlineExceededError(std::string msg="") { return StatusVal(StatusCode::DEADLINE_EXCEEDED, msg); }
-inline StatusVal NotFoundError(std::string msg="") { return StatusVal(StatusCode::NOT_FOUND, msg); }
+inline StatusVal OkStatus(std::string msg = "") {
+  return StatusVal(StatusCode::OK, msg);
+}
+inline StatusVal UnknownError(std::string msg = "") {
+  return StatusVal(StatusCode::UNKNOWN, msg);
+}
+inline StatusVal InvalidArgumentError(std::string msg = "") {
+  return StatusVal(StatusCode::INVALID_ARGUMENT, msg);
+}
+inline StatusVal DeadlineExceededError(std::string msg = "") {
+  return StatusVal(StatusCode::DEADLINE_EXCEEDED, msg);
+}
+inline StatusVal NotFoundError(std::string msg = "") {
+  return StatusVal(StatusCode::NOT_FOUND, msg);
+}
 inline StatusVal AbortedError(std::string msg = "") {
   return StatusVal(StatusCode::ABORTED, msg);
 }
-inline StatusVal InternalError(std::string msg="") { return StatusVal(StatusCode::INTERNAL, msg); }
-inline StatusVal UnavailableError(std::string msg="") { return StatusVal(StatusCode::UNAVAILABLE, msg); }
+inline StatusVal InternalError(std::string msg = "") {
+  return StatusVal(StatusCode::INTERNAL, msg);
+}
+inline StatusVal UnavailableError(std::string msg = "") {
+  return StatusVal(StatusCode::UNAVAILABLE, msg);
+}
 
 template <typename T>
 class StatusOr {
@@ -219,12 +234,14 @@ class StatusOr {
 };
 
 template <typename T>
-std::string to_string(StatusOr<T> v) { return v.to_string(); }
+std::string to_string(StatusOr<T> v) {
+  return v.to_string();
+}
 
-inline StatusVal get_status_(StatusVal s) { return s; }
+inline StatusVal get_status_(const StatusVal& s) { return s; }
 
 template <typename T>
-StatusVal get_status_(StatusOr<T> s) {
+StatusVal get_status_(const StatusOr<T>& s) {
   return s.status();
 }
 
@@ -247,10 +264,10 @@ StatusVal get_status_(StatusOr<T> s) {
   if (!var.ok()) return var.status();        \
   lhs = std::move(var.value());
 
-#define CHECK(v)               \
-  if (!(v)) {                  \
-    ERROR(get_backtrace());    \
-    exit(1);                   \
+#define CHECK(v)            \
+  if (!(v)) {               \
+    ERROR(get_backtrace()); \
+    exit(1);                \
   }
 
 #define CHECK_OK(v)         \

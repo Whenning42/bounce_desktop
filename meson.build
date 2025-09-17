@@ -8,7 +8,11 @@ project('bouncedesk', 'cpp',
 
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
+
+test_deps = [gtest_dep, gmock_dep]
+
 vncclient_dep = dependency('libvncclient')
+vncserver_dep = dependency('libvncserver')
 
 bouncedesk_sources = [
   'client.cpp',
@@ -16,12 +20,13 @@ bouncedesk_sources = [
   'reaper/reaper.cpp',
   'process.cpp',
   'display_vars.cpp',
-  'launch_weston.cpp'
+  'launch_weston.cpp',
+  'mock_vnc_server.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
-  dependencies : [vncclient_dep],
+  dependencies : [vncclient_dep, vncserver_dep],
   include_directories : ['third_party'],
 )
 
@@ -40,20 +45,20 @@ reaper = executable('reaper',
 client_test = executable('client_test',
   'client_test.cpp',
   link_with : bouncedesk_lib,
-  dependencies : [gtest_dep],
+  dependencies : test_deps,
   include_directories : ['third_party']
 )
 
 reaper_test = executable('reaper_test',
   ['reaper/reaper_test.cpp'] + reaper_sources,
   link_with : bouncedesk_lib,
-  dependencies : [gtest_dep, gmock_dep],
+  dependencies : test_deps,
   include_directories : ['third_party'],
 )
 
 ipc_test = executable('ipc_test',
   'reaper/ipc_test.cpp',
-  dependencies : [gtest_dep],
+  dependencies : test_deps,
   include_directories : ['third_party']
 )
 
@@ -65,20 +70,20 @@ reaper_tests_reaper_parent = executable('reaper_tests_reaper_parent',
 
 display_vars_test = executable('display_vars_test',
   ['display_vars_test.cpp', 'display_vars.cpp'],
-  dependencies : [gtest_dep],
+  dependencies : test_deps,
   include_directories : ['third_party']
 )
 
 process_test = executable('process_test',
   ['process_test.cpp', 'process.cpp'],
-  dependencies : [gtest_dep],
+  dependencies : test_deps,
   include_directories : ['third_party']
 )
 
 launch_weston_test = executable('launch_weston_test',
   ['launch_weston_test.cpp', 'launch_weston.cpp'],
   link_with : bouncedesk_lib,
-  dependencies : [gtest_dep, gmock_dep],
+  dependencies : test_deps,
   include_directories : ['third_party']
 )
 

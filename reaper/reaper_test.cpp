@@ -15,6 +15,7 @@
 
 #include "process.h"
 #include "reaper/ipc.h"
+#include "third_party/status/status_gtest.h"
 
 namespace {
 
@@ -22,12 +23,6 @@ using std::chrono::milliseconds;
 using std::chrono::nanoseconds;
 using std::chrono::steady_clock;
 using std::this_thread::sleep_for;
-
-MATCHER_P(StatusIs, code, "") { return get_status_(arg).code() == code; }
-
-#define ASSERT_OK(a) ASSERT_THAT(a, StatusIs(StatusCode::OK));
-
-#define EXPECT_OK(a) EXPECT_THAT(a, StatusIs(StatusCode::OK));
 
 std::string get_ipc_dir() {
   return "/run/user/" + std::to_string(getuid()) + "/bounce_ipc_test";

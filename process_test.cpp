@@ -2,17 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#define CAT(a, b) a##b
-#define CAT_(a, b) CAT(a, b)
-#define UNIQ(v) CAT_(v, __COUNTER__)
-
-#define ASSERT_OK_AND_ASSIGN(lhs, rhs) \
-  ASSERT_OK_AND_ASSIGN_IMPL(UNIQ(v), lhs, rhs)
-
-#define ASSERT_OK_AND_ASSIGN_IMPL(var, lhs, rhs) \
-  auto var = rhs;                                \
-  ASSERT_TRUE(var.ok()) << var.to_string();      \
-  lhs = std::move(var.value());
+#include "third_party/status/status_gtest.h"
 
 StatusOr<Process> run_test(ProcessOut stdout, ProcessOut stderr) {
   auto p = launch_process(

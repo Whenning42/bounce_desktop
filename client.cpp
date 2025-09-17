@@ -1,14 +1,3 @@
-// How should I manage frames?
-//
-// libvnc FB - Controlled by libvnc loop. Doesn't expose safe sections.
-// Bounce FB - Stores a copy of the FB. Updated every time libvnc's fb updates.
-//             - With better synchronization, we could update this less often.
-//
-//
-// run_loop takes two callbacks:
-// - resize: (framebuffer, width, height)
-// - update: (framebuffer)
-
 #include "client.h"
 
 #include <string.h>
@@ -16,6 +5,7 @@
 #include <cassert>
 #include <thread>
 
+#include "mouse_button.h"
 #include "third_party/status/status_or.h"
 
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
@@ -59,6 +49,13 @@ BounceDeskClient::~BounceDeskClient() {
   if (frame_.pixels) {
     free(frame_.pixels);
   }
+  if (client_ && client_->frameBuffer) {
+    free(client_->frameBuffer);
+    client_->frameBuffer = nullptr;
+  }
+  if (client_) {
+    rfbClientCleanup(client_);
+  }
 }
 
 const Frame& BounceDeskClient::get_frame() { return frame_; }
@@ -96,45 +93,77 @@ rfbCredential* unexpected_credential_error(rfbClient* client,
 }  // namespace
 
 void BounceDeskClient::vnc_loop() {
-  rfbClient* client = rfbGetClient(/*bitsPerSample=*/8, /*samplesPerPixel=*/3,
-                                   /*bytesPerPixel*/ 4);
-  rfbClientSetClientData(client, /*tag=*/nullptr, this);
-  client_ = client;
+  client_ = rfbGetClient(/*bitsPerSample=*/8, /*samplesPerPixel=*/3,
+                         /*bytesPerPixel*/ 4);
+  rfbClientSetClientData(client_, /*tag=*/nullptr, this);
 
   // Note: We don't support any clipboard behavior.
   // TODO: Consider setting rfbClientLog to a logging function.
   rfbClientLog = rfb_client_log;
   static const char* server_host = "localhost";
-  client->serverHost = strdup(server_host);
-  client->serverPort = port_;
+  client_->serverHost = strdup(server_host);
+  client_->serverPort = port_;
 
-  client->MallocFrameBuffer = call_resize;
-  client->canHandleNewFBSize = TRUE;
-  client->GotFrameBufferUpdate = call_update;
-  client->GetCredential = unexpected_credential_error;
+  client_->MallocFrameBuffer = call_resize;
+  client_->canHandleNewFBSize = TRUE;
+  client_->GotFrameBufferUpdate = call_update;
+  client_->GetCredential = unexpected_credential_error;
 
   int client_argc = 3;
   const char* client_argv[] = {"bounce_vnc", "-encodings", "raw"};
-  if (!rfbInitClient(client, &client_argc, (char**)client_argv)) {
+  if (!rfbInitClient(client_, &client_argc, (char**)client_argv)) {
     ERROR("Failed to start the server");
   }
 
   while (!stop_vnc_) {
-    int r = WaitForMessage(client, 1'000);
-    if (r < 0) {
-      ERROR("Wait for message error: %d", r);
+    int r;
+    {
+      std::lock_guard l(client_mu_);
+      r = WaitForMessage(client_, 1'000);
     }
-    if (r == 0) {
-      continue;
+    if (r < 0) ERROR("Wait for message error: %d", r);
+    if (r == 0) continue;
+
+    rfbBool ret;
+    {
+      std::lock_guard l(client_mu_);
+      ret = HandleRFBServerMessage(client_);
     }
-    rfbBool ret = HandleRFBServerMessage(client);
     if (ret == FALSE) {
       ERROR("Couldn't handle rfb server message");
       break;
     }
-
-    SendFramebufferUpdateRequest(client, 0, 0, client->width, client->height,
-                                 0);
   }
 }
 // End VNC-loop
+
+void BounceDeskClient::key_press(int keysym) {
+  std::lock_guard l(client_mu_);
+  SendKeyEvent(client_, keysym, /*down=*/true);
+}
+
+void BounceDeskClient::key_release(int keysym) {
+  std::lock_guard l(client_mu_);
+  SendKeyEvent(client_, keysym, /*down=*/false);
+}
+
+void BounceDeskClient::move_mouse(int x, int y) {
+  mouse_x_ = x;
+  mouse_y_ = y;
+  send_pointer_event();
+}
+
+void BounceDeskClient::mouse_press(int button) {
+  button_mask_ = set_button_mask(button_mask_, button, /*pressed=*/true);
+  send_pointer_event();
+}
+
+void BounceDeskClient::mouse_release(int button) {
+  button_mask_ = set_button_mask(button_mask_, button, /*pressed=*/false);
+  send_pointer_event();
+}
+
+void BounceDeskClient::send_pointer_event() {
+  std::lock_guard l(client_mu_);
+  SendPointerEvent(client_, mouse_x_, mouse_y_, button_mask_);
+}

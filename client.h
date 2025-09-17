@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include "frame.h"
@@ -21,23 +22,36 @@ class BounceDeskClient {
 
   const Frame& get_frame();
 
+  // Key press and releases expect X11 keysyms.
+  void key_press(int keysym);
+  void key_release(int keysym);
+  void move_mouse(int x, int y);
+
+  // Button mapping:
+  // 1: left mouse
+  // 2. middle mouse
+  // 3. right mouse
+  void mouse_press(int button);
+  void mouse_release(int button);
+
+  // Exposed to simplify vnc_loop() implementation. Not part of the public API.
   void resize(int w, int h);
   void update(int x, int y, int w, int h);
 
-  // TODO: Input support
-  // Mouse:
-  //   Move, press, release
-  //
-  // Keyboard:
-  //   Press key, Release key
-
  private:
   BounceDeskClient(int port) : port_(port) {}
+
   void vnc_loop();
+  void send_pointer_event();
 
   int port_;
+  std::mutex client_mu_;
   rfbClient* client_;
-  bool stop_vnc_ = false;
+  std::atomic<bool> stop_vnc_ = false;
   std::thread vnc_loop_;
   Frame frame_;
+
+  int mouse_x_ = 10;
+  int mouse_y_ = 10;
+  int button_mask_ = 0;
 };
