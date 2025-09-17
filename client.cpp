@@ -19,11 +19,9 @@
 #include "third_party/status/status_or.h"
 
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
-    int32_t port, ConnectionOptions options) {
-  (void)port;
-  auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
+    int32_t port) {
+  auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient(port));
   client->vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, client.get());
-  client->connection_options_ = std::move(options);
   return client;
 }
 
@@ -103,12 +101,12 @@ void BounceDeskClient::vnc_loop() {
   rfbClientSetClientData(client, /*tag=*/nullptr, this);
   client_ = client;
 
-  // TODO: Consider handling clipboard.
+  // Note: We don't support any clipboard behavior.
   // TODO: Consider setting rfbClientLog to a logging function.
   rfbClientLog = rfb_client_log;
   static const char* server_host = "localhost";
   client->serverHost = strdup(server_host);
-  client->serverPort = connection_options_.port;
+  client->serverPort = port_;
 
   client->MallocFrameBuffer = call_resize;
   client->canHandleNewFBSize = TRUE;

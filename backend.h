@@ -4,5 +4,6 @@
 
 class Backend {
  public:
+  virtual int port() = 0;
   virtual ~Backend() = default;
 };

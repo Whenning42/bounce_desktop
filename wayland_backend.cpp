@@ -32,7 +32,8 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
     const std::vector<std::string>& command) {
   int weston_pid;
   std::string instance_name;
-  for (int port = port_offset;; port++) {
+  int port = port_offset;
+  for (;; port++) {
     instance_name = std::format("vnc_{}", port);
     StatusOr<int> weston = run_weston(
         port, {"./build/export_display", instance_name}, width, height);
@@ -56,7 +57,7 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
   ASSIGN_OR_RETURN(Process subproc, launch_process(command, &env_vars));
 
   return std::unique_ptr<WaylandBackend>(
-      new WaylandBackend(weston_pid, subproc.pid));
+      new WaylandBackend(port, weston_pid, subproc.pid));
 }
 
 WaylandBackend::~WaylandBackend() {

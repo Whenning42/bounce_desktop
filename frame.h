@@ -6,9 +6,9 @@
 
 struct Frame {
   std::mutex mu;
-  int32_t width;
-  int32_t height;
-  uint8_t* pixels;
+  int32_t width = 0;
+  int32_t height = 0;
+  uint8_t* pixels = nullptr;
 };
 
 #endif  // FRAME_

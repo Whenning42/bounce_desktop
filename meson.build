@@ -6,13 +6,9 @@ project('bouncedesk', 'cpp',
                      'warning_level=3',
                      'werror=true'])
 
-add_project_arguments('-Wshadow', language : 'cpp')
-
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
 vncclient_dep = dependency('libvncclient')
-
-fs = import('fs')
 
 bouncedesk_sources = [
   'client.cpp',
@@ -23,21 +19,10 @@ bouncedesk_sources = [
   'launch_weston.cpp'
 ]
 
-if fs.exists('bdisplay_manager.cpp')
-  bouncedesk_sources += ['bdisplay_manager.cpp']
-endif
-
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
   dependencies : [vncclient_dep],
   include_directories : ['third_party'],
-)
-
-client_test = executable('client_test',
-  'client_test.cpp',
-  link_with : bouncedesk_lib,
-  dependencies : [gtest_dep],
-  include_directories : ['third_party']
 )
 
 reaper_sources = [
@@ -50,6 +35,13 @@ reaper_sources = [
 reaper = executable('reaper',
   ['reaper/impl_main.cpp'] + reaper_sources,
   include_directories : ['third_party'],
+)
+
+client_test = executable('client_test',
+  'client_test.cpp',
+  link_with : bouncedesk_lib,
+  dependencies : [gtest_dep],
+  include_directories : ['third_party']
 )
 
 reaper_test = executable('reaper_test',

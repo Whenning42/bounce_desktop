@@ -5,14 +5,13 @@
 
 #include "wayland_backend.h"
 
-const int32_t kPort = 5930;
+const int32_t kPortOffset = 5900;
 
 TEST(Client, GetPixelsReturnsAFrame) {
   auto backend =
-      WaylandBackend::start_server(kPort, 300, 200, {"sleep", "1000"});
+      WaylandBackend::start_server(kPortOffset, 300, 200, {"sleep", "1000"});
   sleep(1);
-  auto client_result =
-      BounceDeskClient::connect(kPort, ConnectionOptions{.port = kPort});
+  auto client_result = BounceDeskClient::connect((*backend)->port());
   ASSERT_TRUE(client_result.ok());
   auto& client = **client_result;
 

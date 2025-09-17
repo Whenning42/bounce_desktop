@@ -7,15 +7,9 @@
 #include "frame.h"
 #include "third_party/status/status_or.h"
 
-struct ConnectionOptions {
-  // Required.
-  int port = 0;
-};
-
 class BounceDeskClient {
  public:
-  static StatusOr<std::unique_ptr<BounceDeskClient>> connect(
-      int32_t port, ConnectionOptions options);
+  static StatusOr<std::unique_ptr<BounceDeskClient>> connect(int32_t port);
   ~BounceDeskClient();
 
   // Delete copy and move operators, since we rely on pointer stability when
@@ -38,12 +32,12 @@ class BounceDeskClient {
   //   Press key, Release key
 
  private:
-  BounceDeskClient() = default;
+  BounceDeskClient(int port) : port_(port) {}
   void vnc_loop();
 
+  int port_;
   rfbClient* client_;
   bool stop_vnc_ = false;
   std::thread vnc_loop_;
   Frame frame_;
-  ConnectionOptions connection_options_;
 };
