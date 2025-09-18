@@ -11,8 +11,16 @@ gmock_dep = dependency('gmock')
 
 test_deps = [gtest_dep, gmock_dep]
 
-vncclient_dep = dependency('libvncclient')
-vncserver_dep = dependency('libvncserver')
+# Note: We dynamically link GPL'd libvncclient/server.
+# if this is a problem, we can migrate to gtk-vnc as our
+# client and we can GPL our mock_vnc_server which is our
+# only libvncserver consumer.
+#
+# TODO: Consider migrating onto gtk-vnc.
+#
+# gtk-vnc docs link: https://lazka.github.io/pgi-docs/GVnc-1.0/index.html
+vncclient_dep = dependency('libvncclient', static: false)
+vncserver_dep = dependency('libvncserver', static: false)
 
 bouncedesk_sources = [
   'client.cpp',
