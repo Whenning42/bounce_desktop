@@ -22,6 +22,7 @@ struct M {
   int32_t v = 0;
 };
 
+int test_num = 0;
 class IpcTest : public testing::Test {
  protected:
   std::string ipc_dir_;
@@ -32,7 +33,9 @@ class IpcTest : public testing::Test {
   M m_1_ = M{.v = 1};
 
   IpcTest() {
-    ipc_dir_ = std::format("/run/user/{}/bounce_ipc_test", getuid());
+    ipc_dir_ =
+        std::format("/run/user/{}/bounce_ipc_test_{}", getuid(), test_num);
+    test_num++;
     std::filesystem::create_directory(ipc_dir_);
     fd_0_ = open("/dev/null", O_RDONLY);
     fd_1_ = open("/dev/null", O_RDONLY);

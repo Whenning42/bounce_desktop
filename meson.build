@@ -90,12 +90,12 @@ export_display = executable('export_display',
   ['export_display_main.cpp', 'display_vars.cpp'],
 )
 
-test('client_test', client_test, is_parallel : false,  workdir : meson.source_root())
-test('reaper_test', reaper_test, is_parallel : false, workdir : meson.source_root())
-test('ipc_test', ipc_test, is_parallel : false, workdir : meson.source_root())
-test('display_vars_test', display_vars_test, is_parallel : false, workdir : meson.source_root())
-test('process_test', process_test, is_parallel : false, workdir : meson.source_root())
-test('launch_weston_test', launch_weston_test, is_parallel : false, workdir : meson.source_root())
+test('client_test', client_test, workdir : meson.source_root())
+test('reaper_test', reaper_test, workdir : meson.source_root())
+test('ipc_test', ipc_test, workdir : meson.source_root())
+test('display_vars_test', display_vars_test, workdir : meson.source_root())
+test('process_test', process_test, workdir : meson.source_root())
+test('launch_weston_test', launch_weston_test, workdir : meson.source_root())
 
 # Python extension module (optional)
 python3 = import('python').find_installation('python3', required: false)
