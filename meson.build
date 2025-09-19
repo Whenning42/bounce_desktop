@@ -8,6 +8,7 @@ project('bouncedesk', 'cpp',
 
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
+sdl2_dep = dependency('sdl2')
 
 test_deps = [gtest_dep, gmock_dep]
 
@@ -29,12 +30,13 @@ bouncedesk_sources = [
   'process.cpp',
   'display_vars.cpp',
   'launch_weston.cpp',
-  'mock_vnc_server.cpp'
+  'mock_vnc_server.cpp',
+  'sdl_viewer.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
-  dependencies : [vncclient_dep, vncserver_dep],
+  dependencies : [vncclient_dep, vncserver_dep, sdl2_dep],
 )
 
 reaper_sources = [
@@ -87,8 +89,10 @@ launch_weston_test = executable('launch_weston_test',
 )
 
 export_display = executable('export_display',
-  ['export_display_main.cpp', 'display_vars.cpp'],
+  ['export_display_main.cpp', 'display_vars.cpp']
 )
+
+integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib)
 
 test('client_test', client_test, workdir : meson.source_root())
 test('reaper_test', reaper_test, workdir : meson.source_root())

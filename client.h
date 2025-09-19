@@ -1,3 +1,6 @@
+#ifndef CLIENT_H_
+#define CLIENT_H_
+
 #include <rfb/rfbclient.h>
 #include <stdint.h>
 
@@ -57,3 +60,5 @@ class BounceDeskClient {
   int mouse_y_ = 10;
   int button_mask_ = 0;
 };
+
+#endif
