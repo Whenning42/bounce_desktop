@@ -124,6 +124,13 @@ void BounceDeskClient::vnc_loop() {
 
   while (!stop_vnc_) {
     int r;
+    // Sleep a bit every loop iteration to allow client requests the chance to
+    // acquire the client mutex.
+    // A cleaner implementation would be to have client requests outside of this
+    // thread thread push events to be processed by this thread, and avoid
+    // locking around the client altogether, but this is simple enough and
+    // should work fairly well for now.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     {
       std::lock_guard l(client_mu_);
       r = WaitForMessage(client_, 1'000);
