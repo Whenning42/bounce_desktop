@@ -8,46 +8,45 @@
 #include "mouse_button.h"
 #include "third_party/status/status_or.h"
 
+namespace {
+int32_t fb_size(int w, int h) { return w * h * 4; }
+}  // namespace
+
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
     int32_t port) {
-  auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient(port));
-  client->vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, client.get());
+  auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
+  RETURN_IF_ERROR(client->connect_impl(port));
   return client;
 }
 
+StatusVal BounceDeskClient::connect_impl(int32_t port) {
+  port_ = port;
+  vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, this);
+  return OkStatus();
+}
+
 void BounceDeskClient::resize(int width, int height) {
-  std::lock_guard l(frame_.mu);
-  if (frame_.pixels) {
-    free(frame_.pixels);
-  }
   if (client_->frameBuffer) {
     free(client_->frameBuffer);
+    client_->frameBuffer = nullptr;
   }
-  frame_.width = width;
-  frame_.height = height;
-  frame_.pixels = (uint8_t*)malloc(4 * width * height);
+  client_->width = width;
+  client_->height = height;
   client_->frameBuffer = (uint8_t*)malloc(4 * width * height);
 };
 
 void BounceDeskClient::update(int x, int y, int w, int h) {
+  (void)x, (void)y, (void)w, (void)h;
   if (!client_->frameBuffer) {
     ERROR("Framebuffer is null!");
     return;
   }
-  std::lock_guard l(frame_.mu);
-  // Copy the whole frame every update and ignore x, y, w, h.
-  (void)x, (void)y, (void)w, (void)h;
-  size_t frame_bytes = 4 * frame_.width * frame_.height;
-  memcpy(frame_.pixels, client_->frameBuffer, frame_bytes);
 };
 
 BounceDeskClient::~BounceDeskClient() {
   stop_vnc_ = true;
   if (vnc_loop_.joinable()) {
     vnc_loop_.join();
-  }
-  if (frame_.pixels) {
-    free(frame_.pixels);
   }
   if (client_ && client_->frameBuffer) {
     free(client_->frameBuffer);
@@ -58,7 +57,15 @@ BounceDeskClient::~BounceDeskClient() {
   }
 }
 
-const Frame& BounceDeskClient::get_frame() { return frame_; }
+Frame BounceDeskClient::get_frame() {
+  std::lock_guard l(client_mu_);
+  int w = client_->width;
+  int h = client_->height;
+  size_t size = fb_size(w, h);
+  uint8_t* fb_copy = (uint8_t*)malloc(size);
+  memcpy(fb_copy, client_->frameBuffer, size);
+  return Frame{.width = w, .height = h, .pixels = UniquePtrBuf(fb_copy)};
+}
 
 // Begin VNC-loop
 namespace {

@@ -11,7 +11,7 @@
 
 const int32_t kPortOffset = 5900;
 
-TEST(Client, get_pixels_returns_a_frame) {
+TEST(Client, get_frame_returns_a_frame) {
   auto backend =
       WaylandBackend::start_server(kPortOffset, 300, 200, {"sleep", "1000"});
   sleep(1);

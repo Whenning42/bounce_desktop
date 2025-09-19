@@ -2,13 +2,20 @@
 #define FRAME_
 
 #include <cstdint>
-#include <mutex>
+#include <memory>
+
+struct free_data {
+  void operator()(uint8_t* p) const noexcept { free(p); }
+};
+
+using UniquePtrBuf = std::unique_ptr<uint8_t[], free_data>;
 
 struct Frame {
-  std::mutex mu;
   int32_t width = 0;
   int32_t height = 0;
-  uint8_t* pixels = nullptr;
+  UniquePtrBuf pixels;
+
+  UniquePtrBuf take_pixels() { return std::move(pixels); }
 };
 
 #endif  // FRAME_

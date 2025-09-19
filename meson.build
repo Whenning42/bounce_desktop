@@ -106,3 +106,38 @@ test('ipc_test', ipc_test, is_parallel : false, workdir : meson.source_root())
 test('display_vars_test', display_vars_test, is_parallel : false, workdir : meson.source_root())
 test('process_test', process_test, is_parallel : false, workdir : meson.source_root())
 test('launch_weston_test', launch_weston_test, is_parallel : false, workdir : meson.source_root())
+
+# Python extension module (optional)
+python3 = import('python').find_installation('python3', required: false)
+nanobind_dep = dependency('nanobind')
+
+if python3.found() and nanobind_dep.found()
+  py_cpp_args = []
+
+  # Python extension sources
+  py_sources = [
+    'client_ext.cpp',
+    'third_party/status/exceptions.h',
+  ]
+  
+  # Build Python extension
+  python3.extension_module('bounce_desk',
+    py_sources,
+    dependencies: [nanobind_dep],
+    link_with: bouncedesk_lib,
+    cpp_args: py_cpp_args,
+    override_options: [
+      'cpp_rtti=true',
+      'cpp_eh=default',
+      'warning_level=2',
+    ]
+  )
+  
+  # Python tests
+  test('bounce_desk_test',
+    python3,
+    args: [files('bounce_desk_test.py')],
+    env: {'PYTHONPATH': meson.current_build_dir()},
+    workdir : meson.source_root()
+  )
+endif

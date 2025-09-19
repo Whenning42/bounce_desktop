@@ -20,7 +20,7 @@ class BounceDeskClient {
   BounceDeskClient(BounceDeskClient&&) = delete;
   BounceDeskClient& operator=(BounceDeskClient&&) = delete;
 
-  const Frame& get_frame();
+  Frame get_frame();
 
   // Key press and releases expect X11 keysyms.
   void key_press(int keysym);
@@ -38,9 +38,11 @@ class BounceDeskClient {
   void resize(int w, int h);
   void update(int x, int y, int w, int h);
 
- private:
-  BounceDeskClient(int port) : port_(port) {}
+ protected:
+  StatusVal connect_impl(int32_t port);
+  BounceDeskClient() = default;
 
+ private:
   void vnc_loop();
   void send_pointer_event();
 
