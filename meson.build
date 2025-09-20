@@ -31,7 +31,10 @@ bouncedesk_sources = [
   'display_vars.cpp',
   'launch_weston.cpp',
   'mock_vnc_server.cpp',
-  'sdl_viewer.cpp'
+  'sdl_viewer.cpp',
+  'process/env_vars.cpp',
+  'process/fd.cpp',
+  'process/process_helpers.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
@@ -44,6 +47,9 @@ reaper_sources = [
   'reaper/impl.cpp',
   'reaper/cleanup.cpp',
   'process.cpp',
+  'process/env_vars.cpp',
+  'process/fd.cpp',
+  'process/process_helpers.cpp'
 ]
 
 reaper = executable('reaper',
@@ -78,7 +84,11 @@ display_vars_test = executable('display_vars_test',
 )
 
 process_test = executable('process_test',
-  ['process_test.cpp', 'process.cpp'],
+  ['process_test.cpp',
+  'process.cpp',
+  'process/env_vars.cpp',
+  'process/fd.cpp',
+  'process/process_helpers.cpp'],
   dependencies : test_deps,
 )
 

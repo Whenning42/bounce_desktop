@@ -82,15 +82,18 @@ StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
       "--"};
   weston_command.insert(weston_command.end(), command.begin(), command.end());
 
+  auto stream_conf = ProcessOutConf{
+      .stdout = StreamOutConf::Pipe(),
+      .stderr = StreamOutConf::StdoutPipe(),
+  };
   ASSIGN_OR_RETURN(Process p, launch_process(weston_command, /*env=*/nullptr,
-                                             /*stdout=*/ProcessOut::PIPE,
-                                             /*stderr=*/ProcessOut::STDOUT));
+                                             std::move(stream_conf)));
   auto start = std::chrono::steady_clock::now();
   auto timeout = std::chrono::milliseconds(1000);
   std::string output;
-  set_fd_nonblocking(p.stdout_pipe);
+  set_fd_nonblocking(p.stdout.fd());
   while (std::chrono::steady_clock::now() - start < timeout) {
-    read_fd(p.stdout_pipe, &output);
+    read_fd(p.stdout.fd(), &output);
     RETURN_IF_ERROR(search_for_error(output));
     if (has_child(p.pid)) {
       return p.pid;

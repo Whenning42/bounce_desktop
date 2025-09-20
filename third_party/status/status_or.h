@@ -24,6 +24,7 @@
 #define STATUS_OR_H_
 
 #include <cstdlib>
+#include <string>
 #include <type_traits>
 
 #include "logger.h"
