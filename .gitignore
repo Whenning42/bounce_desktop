@@ -1,2 +1,4 @@
 support_tests/out
 subprojects/
+.vscode
+todo.txt
