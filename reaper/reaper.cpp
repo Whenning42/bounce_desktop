@@ -34,7 +34,7 @@ StatusOr<Reaper> Reaper::create(const std::string& command,
 StatusOr<int> Reaper::launch() {
   // Launch the reaper.
   EnvVars env = EnvVars::environ();
-  env.add_var(kReaperIpcFileEnvVar, ipc_token_.c_str());
+  env.set_var(kReaperIpcFileEnvVar, ipc_token_.c_str());
   ASSIGN_OR_RETURN(Process p,
                    launch_process({"./build/reaper", command_}, &env));
 

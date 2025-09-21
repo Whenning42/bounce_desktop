@@ -50,11 +50,8 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
   if (!r) return UnknownError("Failed to read display vars.");
 
   EnvVars env_vars = EnvVars::environ();
-  env_vars.add_var("X_DISPLAY", dpy_vars.x_display.c_str());
-  env_vars.add_var("WAYLAND_DISPLAY", dpy_vars.wayland_display.c_str());
-
-  // TODO: Consider piping command's stdout and stderr to a file.
-  ASSIGN_OR_RETURN(Process subproc, launch_process(command, &env_vars));
+  env_vars.set_var("DISPLAY", dpy_vars.x_display.c_str());
+  env_vars.set_var("WAYLAND_DISPLAY", dpy_vars.wayland_display.c_str());
 
   return std::unique_ptr<WaylandBackend>(
       new WaylandBackend(port, weston_pid, subproc.pid));

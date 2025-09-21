@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 TEST(DisplayVars, read_write_vars_round_trip) {
-  setenv("X_DISPLAY", ":5", true);
+  setenv("DISPLAY", ":5", true);
   setenv("WAYLAND_DISPLAY", "wayland-2", true);
   const std::string instance_name = "test_instance";
   write_vars(instance_name);
@@ -16,7 +16,7 @@ TEST(DisplayVars, read_write_vars_round_trip) {
 }
 
 TEST(DisplayVars, clean_up_deletes_vars) {
-  setenv("X_DISPLAY", ":5", true);
+  setenv("DISPLAY", ":5", true);
   setenv("WAYLAND_DISPLAY", "wayland-2", true);
   const std::string instance_name = "delete_test_instance";
   write_vars(instance_name);

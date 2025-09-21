@@ -1,7 +1,17 @@
 #ifndef PROCESS_ENV_VARS_H_
 #define PROCESS_ENV_VARS_H_
 
+#include <stdio.h>
+
 #include <vector>
+
+inline void print_vars(char** vars) {
+  for (int i = 0;; ++i) {
+    char* v = vars[i];
+    if (!v) return;
+    printf("VAR: %s\n", v);
+  }
+}
 
 class EnvVars {
  public:
@@ -10,7 +20,7 @@ class EnvVars {
   ~EnvVars();
 
   // Adds the given variable and value to env vars.
-  void add_var(const char* var, const char* val);
+  void set_var(const char* var, const char* val);
 
   // Returns a copy of the process's environment.
   static EnvVars environ();

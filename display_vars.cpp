@@ -8,7 +8,7 @@
 #include <fstream>
 
 namespace {
-const char* kXDisplay = "X_DISPLAY";
+const char* kXDisplay = "DISPLAY";
 const char* kWaylandDisplay = "WAYLAND_DISPLAY";
 const char* kDefaultXDisplay = "";
 const char* kDefaultWaylandDisplay = "";
