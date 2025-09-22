@@ -4,6 +4,7 @@
 #include <chrono>
 #include <string>
 
+#include "process.h"
 #include "reaper/ipc.h"
 #include "reaper/protocol.h"
 #include "third_party/status/status_or.h"
@@ -29,7 +30,9 @@ class Reaper {
   //
   // Returns an INVALID_ARGUMENT error if the process fails to launch, or if it
   // exits quickly after launching.
-  StatusOr<int> launch();
+  StatusVal launch();
+
+  Process& process() { return reaper_; }
 
   // Requests that the reqper stop all of its descendants and waits for a
   // confirmation from the reaper that is succeeded.
@@ -51,6 +54,7 @@ class Reaper {
   std::string ipc_dir_;
   IPC<ReaperMessage> ipc_;
   Token ipc_token_;
+  Process reaper_;
 };
 
 }  // namespace reaper

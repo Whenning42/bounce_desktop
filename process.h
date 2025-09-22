@@ -15,11 +15,22 @@
 
 class Process {
  public:
-  int pid;
+  int pid = -1;
   StreamOut stdout;
   StreamOut stderr;
+
+  Process() = default;
+  Process(Process&& other);
+  Process& operator=(Process&& other);
+  Process(const Process& other) = delete;
+  Process& operator=(Process& other) = delete;
+  ~Process();
 };
 
+// Launch the given command with the given env vars. The returned Process
+// is RAII liftime managed, so callers need to hold on to it as long as
+// they want the process to continue running.
+//
 // If no environment is passed in. Defaults to using the parent process's
 // environment. To get an empty environment, default construct an EnvVars
 // instance.

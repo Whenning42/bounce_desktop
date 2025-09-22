@@ -4,6 +4,7 @@
 #include <fcntl.h>
 
 #include "process/fd.h"
+#include "third_party/status/status_or.h"
 
 // Process-lib internal use only.
 enum class StreamKind {
@@ -20,25 +21,22 @@ enum class StreamKind {
 
 class StreamOutConf {
  public:
-  static StreamOutConf None() { return StreamOutConf(StreamKind::NONE); }
-  static StreamOutConf Pipe() { return StreamOutConf(StreamKind::PIPE); }
-  static StreamOutConf StdoutPipe() {
-    return StreamOutConf(StreamKind::STDOUT_PIPE);
-  }
-  static StreamOutConf File(Fd&& fd) {
-    return StreamOutConf(StreamKind::FILE, std::move(fd));
-  }
-  static StreamOutConf DevNull() {
-    return StreamOutConf(StreamKind::FILE, Fd::take(open("/dev/null", O_RDWR)));
-  }
+  static StreamOutConf None();
+  static StreamOutConf Pipe();
+  static StreamOutConf StdoutPipe();
+  static StreamOutConf File(Fd&& fd);
+  // Tries to create the file if it doesn't already exist.
+  static StatusOr<StreamOutConf> File(const char* filename);
+  // Tries to create the file if it doesn't already exist.
+  static StatusOr<StreamOutConf> File(const std::string& filename);
+  static StreamOutConf DevNull();
 
   // Process-lib internal use only.
-  StreamKind kind() const { return kind_; }
-  Fd&& take_fd() { return std::move(fd_); }
+  StreamKind kind() const;
+  Fd&& take_fd();
 
  private:
-  StreamOutConf(StreamKind kind, Fd&& fd = Fd())
-      : kind_(kind), fd_(std::move(fd)) {}
+  StreamOutConf(StreamKind kind, Fd&& fd = Fd());
 
   StreamKind kind_ = StreamKind::NONE;
   Fd fd_;
@@ -47,10 +45,9 @@ class StreamOutConf {
 class StreamOut {
  public:
   StreamOut() = default;
-  StreamOut(StreamKind kind, Fd&& fd = Fd())
-      : kind_(kind), fd_(std::move(fd)) {}
-  int fd() const { return *fd_; }
-  bool is_pipe() const { return kind_ == StreamKind::PIPE; }
+  StreamOut(StreamKind kind, Fd&& fd = Fd());
+  int fd() const;
+  bool is_pipe() const;
 
  private:
   StreamKind kind_ = StreamKind::NONE;

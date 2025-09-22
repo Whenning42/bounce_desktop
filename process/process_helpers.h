@@ -18,10 +18,17 @@ struct PrelaunchOut {
   StreamOut stdout;
   StreamOut stderr;
   std::vector<Fd> close_after_spawn;
+
+  PrelaunchOut() = default;
+  PrelaunchOut(PrelaunchOut&& other) = delete;
+  PrelaunchOut& operator=(PrelaunchOut&& other) = delete;
+  PrelaunchOut(const PrelaunchOut& other) = delete;
+  PrelaunchOut& operator=(const PrelaunchOut& other) = delete;
 };
 
 StatusVal validate_process_out_conf(const ProcessOutConf& conf);
 
-PrelaunchOut process_streams_prelaunch(ProcessOutConf&& out_conf);
+void process_streams_prelaunch(ProcessOutConf&& out_conf,
+                               PrelaunchOut* prelaunch);
 
 #endif

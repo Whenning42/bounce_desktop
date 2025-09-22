@@ -1,7 +1,5 @@
 #include "wayland_backend.h"
 
-#include <signal.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include <chrono>
@@ -10,40 +8,26 @@
 
 #include "display_vars.h"
 #include "launch_weston.h"
-#include "process.h"
-
-namespace {
-void terminate_processes(const std::vector<int>& pids) {
-  for (auto pid : pids) {
-    kill(pid, SIGTERM);
-  }
-  std::this_thread::sleep_for(std::chrono::seconds(3));
-  for (auto pid : pids) {
-    int r = waitpid(pid, nullptr, WNOHANG);
-    if (r == 0) {
-      kill(pid, SIGTERM);
-    }
-  }
-};
-}  // namespace
 
 StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
     int32_t port_offset, int32_t width, int32_t height,
-    const std::vector<std::string>& command) {
-  int weston_pid;
+    const std::vector<std::string>& command, ProcessOutConf&& command_out) {
+  Process weston;
   std::string instance_name;
   int port = port_offset;
   for (;; port++) {
     instance_name = std::format("vnc_{}", port);
-    StatusOr<int> weston = run_weston(
+    StatusOr<Process> weston_or = run_weston(
         port, {"./build/export_display", instance_name}, width, height);
-    if (!weston.ok() && weston.status().code() == StatusCode::UNAVAILABLE) {
+    if (!weston_or.ok() &&
+        weston_or.status().code() == StatusCode::UNAVAILABLE) {
       continue;
     }
-    RETURN_IF_ERROR(weston);
-    weston_pid = *weston;
+    RETURN_IF_ERROR(weston_or);
+    weston = std::move(weston_or.value());
     break;
   }
+  LOG(kLogVnc, "Weston started on port: %d", port);
 
   DisplayVars dpy_vars;
   bool r = read_vars(instance_name, &dpy_vars);
@@ -52,11 +36,14 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
   EnvVars env_vars = EnvVars::environ();
   env_vars.set_var("DISPLAY", dpy_vars.x_display.c_str());
   env_vars.set_var("WAYLAND_DISPLAY", dpy_vars.wayland_display.c_str());
+  printf(
+      "===================== Running on DISPLAY: %s, WAYLAND_DISPLAY: %s "
+      "==============\n",
+      dpy_vars.x_display.c_str(), dpy_vars.wayland_display.c_str());
+
+  ASSIGN_OR_RETURN(Process subproc,
+                   launch_process(command, &env_vars, std::move(command_out)));
 
   return std::unique_ptr<WaylandBackend>(
-      new WaylandBackend(port, weston_pid, subproc.pid));
-}
-
-WaylandBackend::~WaylandBackend() {
-  terminate_processes({weston_pid_, subproc_pid_});
+      new WaylandBackend(port, std::move(weston), std::move(subproc)));
 }

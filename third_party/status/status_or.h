@@ -208,13 +208,14 @@ class StatusOr {
   const T* operator->() const { return &value_; }
 
   // Returns value if present, otherwise ERROR() logs and exit(1)
-  T& value_or_die() {
-    if (!has_value()) {
-      std::string status_str = status().to_string();
-      ERROR("value_or_die() called on error status: %s", status_str.c_str());
-      exit(1);
-    }
+  T& value_or_die() & {
+    die_if_status();
     return value_;
+  }
+
+  T&& value_or_die() && {
+    die_if_status();
+    return std::move(value_);
   }
 
   std::string to_string() {
@@ -227,6 +228,13 @@ class StatusOr {
 
  private:
   bool has_value() const { return ok(); }
+  void die_if_status() const {
+    if (!has_value()) {
+      std::string status_str = status().to_string();
+      ERROR("value_or_die() called on error status: %s", status_str.c_str());
+      exit(1);
+    }
+  }
 
   StatusVal status_ = StatusVal(StatusCode::UNKNOWN);
   union {

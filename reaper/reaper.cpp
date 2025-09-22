@@ -31,7 +31,7 @@ StatusOr<Reaper> Reaper::create(const std::string& command,
   return Reaper(command, ipc_dir, std::move(ipc), std::move(token));
 }
 
-StatusOr<int> Reaper::launch() {
+StatusVal Reaper::launch() {
   // Launch the reaper.
   EnvVars env = EnvVars::environ();
   env.set_var(kReaperIpcFileEnvVar, ipc_token_.c_str());
@@ -57,7 +57,8 @@ StatusOr<int> Reaper::launch() {
   if (message.code != ReaperMessageCode::FINISHED_LAUNCH) {
     return InvalidArgumentError("Reaper failed to launch the subcommand");
   }
-  return p.pid;
+  reaper_ = std::move(p);
+  return OkStatus();
 }
 
 bool Reaper::clean_up() {

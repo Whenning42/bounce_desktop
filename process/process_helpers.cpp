@@ -16,16 +16,17 @@ StatusVal validate_process_out_conf(const ProcessOutConf& conf) {
   return OkStatus();
 }
 
-PrelaunchOut process_streams_prelaunch(ProcessOutConf&& out_conf) {
-  StreamOut stdout;
-  StreamOut stderr;
-  std::vector<Fd> close_after_spawn;
-  std::vector<int> subproc_close;
+void process_streams_prelaunch(ProcessOutConf&& out_conf,
+                               PrelaunchOut* prelaunch) {
+  posix_spawn_file_actions_t& actions = prelaunch->file_actions;
+  StreamOut& stdout = prelaunch->stdout;
+  StreamOut& stderr = prelaunch->stderr;
+  std::vector<Fd>& close_after_spawn = prelaunch->close_after_spawn;
 
-  // Each input can be one of NONE, PIPE, STDOUT_PIPE, or FILE.
-  posix_spawn_file_actions_t actions;
   CHECK(posix_spawn_file_actions_init(&actions) == 0);
 
+  // Each input can be one of NONE, PIPE, STDOUT_PIPE, or FILE.
+  std::vector<int> subproc_close;
   int stdout_write_fd = -1;
   switch (out_conf.stdout.kind()) {
     case StreamKind::PIPE: {
@@ -45,6 +46,8 @@ PrelaunchOut process_streams_prelaunch(ProcessOutConf&& out_conf) {
     }
     case StreamKind::FILE: {
       stdout = StreamOut(StreamKind::FILE, out_conf.stdout.take_fd());
+      CHECK(posix_spawn_file_actions_adddup2(&actions, stdout.fd(),
+                                             STDOUT_FILENO) == 0);
       break;
     }
     case StreamKind::NONE:
@@ -76,6 +79,8 @@ PrelaunchOut process_streams_prelaunch(ProcessOutConf&& out_conf) {
     }
     case StreamKind::FILE: {
       stderr = StreamOut(StreamKind::FILE, out_conf.stderr.take_fd());
+      CHECK(posix_spawn_file_actions_adddup2(&actions, stderr.fd(),
+                                             STDERR_FILENO) == 0);
       break;
     }
     case StreamKind::NONE: {
@@ -87,9 +92,4 @@ PrelaunchOut process_streams_prelaunch(ProcessOutConf&& out_conf) {
   for (int fd : subproc_close) {
     CHECK(posix_spawn_file_actions_addclose(&actions, fd) == 0);
   }
-
-  return PrelaunchOut{.file_actions = std::move(actions),
-                      .stdout = std::move(stdout),
-                      .stderr = std::move(stderr),
-                      .close_after_spawn = std::move(close_after_spawn)};
 }

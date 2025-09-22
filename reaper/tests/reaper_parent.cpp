@@ -24,14 +24,14 @@ int main(int argc, char* argv[]) {
   StatusOr<reaper::Reaper> reaper = reaper::Reaper::create(
       "python3 ./reaper/tests/reaper_ptree.py -1 -1", ipc_dir);
   CHECK_OK(reaper);
-  StatusOr<int> result = reaper->launch();
+  StatusOr<Process> result = reaper->launch();
   if (!result.ok()) {
     ERROR("Failed to launch the reaper: %s",
           result.status().to_string().c_str());
     return 1;
   }
 
-  int reaper_pid = result.value();
+  int reaper_pid = result.value().pid;
   sleep_for(milliseconds(100));
 
   int status;

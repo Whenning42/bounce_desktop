@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "process.h"
 #include "third_party/status/status_or.h"
 
 // Try running a Weston VNC backend display that runs the given
@@ -18,7 +19,7 @@
 // Returns:
 //  - UNAVAILABLE_ERROR if the chosen port is taken.
 //  - UNKNOWN_ERROR if weston fails with any non-port related error.
-StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
-                         int width = 800, int height = 600);
+StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
+                             int width = 800, int height = 600);
 
 #endif

@@ -34,7 +34,8 @@ bouncedesk_sources = [
   'sdl_viewer.cpp',
   'process/env_vars.cpp',
   'process/fd.cpp',
-  'process/process_helpers.cpp'
+  'process/process_helpers.cpp',
+  'process/stream.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
@@ -49,7 +50,8 @@ reaper_sources = [
   'process.cpp',
   'process/env_vars.cpp',
   'process/fd.cpp',
-  'process/process_helpers.cpp'
+  'process/process_helpers.cpp',
+  'process/stream.cpp'
 ]
 
 reaper = executable('reaper',
@@ -88,7 +90,8 @@ process_test = executable('process_test',
   'process.cpp',
   'process/env_vars.cpp',
   'process/fd.cpp',
-  'process/process_helpers.cpp'],
+  'process/process_helpers.cpp',
+  'process/stream.cpp'],
   dependencies : test_deps,
 )
 
@@ -100,6 +103,11 @@ launch_weston_test = executable('launch_weston_test',
 
 export_display = executable('export_display',
   ['export_display_main.cpp', 'display_vars.cpp']
+)
+
+stdout_poc = executable('stdout_poc',
+  ['stdout_poc_main.cpp'],
+  link_with : bouncedesk_lib,
 )
 
 integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib)
@@ -145,3 +153,4 @@ if python3.found() and nanobind_dep.found()
     workdir : meson.source_root()
   )
 endif
+

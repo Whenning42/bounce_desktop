@@ -1,5 +1,6 @@
 #include "reaper/reaper.h"
 
+#include <assert.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <signal.h>
@@ -36,8 +37,8 @@ reaper::Reaper run_reaper_ptree(const std::string& args,
   std::string command = "python3 ./reaper/tests/reaper_ptree.py " + args;
   reaper::Reaper reaper =
       std::move(reaper::Reaper::create(command, ipc_dir).value_or_die());
-  int r = reaper.launch().value_or_die();
-  if (pid) *pid = r;
+  assert(reaper.launch().code() == StatusCode::OK);
+  if (pid) *pid = reaper.process().pid;
 
   // Give the reaper and the process tree time to start up.
   sleep_for(milliseconds(100));
@@ -165,12 +166,12 @@ TEST_F(ReaperTest, CleanupExitTest) {
 }
 
 TEST_F(ReaperTest, ParentExitTest) {
-  int pid = launch_process({"./build/reaper_tests_reaper_parent", ipc_dir_})
-                .value_or_die()
-                .pid;
+  Process p = launch_process({"./build/reaper_tests_reaper_parent", ipc_dir_})
+                  .value_or_die();
 
   int status;
-  waitpid(pid, &status, 0);
+  int r = waitpid(p.pid, &status, 0);
+  EXPECT_GE(r, 1);
   EXPECT_EQ(WEXITSTATUS(status), 0);
 
   EXPECT_ptree_is_cleaned_up();
@@ -180,9 +181,9 @@ TEST_F(ReaperTest, InvalidCommandError) {
   reaper::Reaper reaper = std::move(
       reaper::Reaper::create("/nonexistent/command/that/should/fail", ipc_dir_)
           .value_or_die());
-  StatusOr<int> result = reaper.launch();
+  StatusOr<Process> p = reaper.launch();
 
-  EXPECT_THAT(result, StatusIs(StatusCode::INVALID_ARGUMENT));
+  EXPECT_THAT(p, StatusIs(StatusCode::INVALID_ARGUMENT));
 }
 
 TEST_F(ReaperTest, ReaperStaysOpenAfterChildren) {

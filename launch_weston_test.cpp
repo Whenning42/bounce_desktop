@@ -19,7 +19,7 @@ TEST(LaunchWeston, launch_succeeds) {
   auto r = run_weston(5950, {"./build/export_display", "test"});
   EXPECT_TRUE(r.ok()) << r.status().to_string();
   if (r.ok()) {
-    close_proc(*r);
+    close_proc(r->pid);
   }
 }
 
@@ -28,7 +28,7 @@ TEST(LaunchWeston, port_taken_gives_unavailable_error) {
   auto b = run_weston(5951, {"./build/export_display", "test"});
   EXPECT_THAT(b, StatusIs(StatusCode::UNAVAILABLE));
   if (a.ok()) {
-    close_proc(*a);
+    close_proc(a->pid);
   }
 }
 

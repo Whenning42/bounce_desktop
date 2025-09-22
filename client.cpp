@@ -120,6 +120,7 @@ void BounceDeskClient::vnc_loop() {
   const char* client_argv[] = {"bounce_vnc", "-encodings", "raw"};
   if (!rfbInitClient(client_, &client_argc, (char**)client_argv)) {
     ERROR("Failed to start the server");
+    return;
   }
 
   while (!stop_vnc_) {

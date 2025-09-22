@@ -53,9 +53,10 @@ StatusVal search_for_error(const std::string& out) {
     return UnavailableError("Port already in use.");
   }
   if (out.find(kWaylandPipeFailed) != std::string::npos) {
-    return UnknownError(
-        "Weston launch failed with to process the wayland connection because "
-        "of a broken pipe.");
+    return UnknownError(std::format(
+        "Weston launch failed to process the wayland connection because "
+        "of a broken pipe.\nWeston log: {}",
+        out));
   }
   if (out.find(kDisplayPipeFailed) != std::string::npos) {
     return UnknownError(
@@ -65,8 +66,8 @@ StatusVal search_for_error(const std::string& out) {
 }
 }  // namespace
 
-StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
-                         int width, int height) {
+StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
+                             int width, int height) {
   // TODO: Figure out how to distribute or upstream our authentication
   // change.
   setenv("LD_LIBRARY_PATH", "/usr/local/lib", true);
@@ -88,17 +89,22 @@ StatusOr<int> run_weston(int port, const std::vector<std::string>& command,
   };
   ASSIGN_OR_RETURN(Process p, launch_process(weston_command, /*env=*/nullptr,
                                              std::move(stream_conf)));
+  LOG(kLogVnc, "Launched weston as process: %d", p.pid);
   auto start = std::chrono::steady_clock::now();
-  auto timeout = std::chrono::milliseconds(1000);
+  auto timeout = std::chrono::seconds(5000);
   std::string output;
   set_fd_nonblocking(p.stdout.fd());
+  int hits = 0;
   while (std::chrono::steady_clock::now() - start < timeout) {
     read_fd(p.stdout.fd(), &output);
     RETURN_IF_ERROR(search_for_error(output));
     if (has_child(p.pid)) {
-      return p.pid;
+      hits++;
+      if (hits > 20) {
+        printf("Weston output: %s\n", output.c_str());
+        return p;
+      }
     }
-
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
   return UnknownError(
