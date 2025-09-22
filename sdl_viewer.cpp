@@ -7,10 +7,12 @@
 #include <cstdlib>
 #include <vector>
 
-StatusOr<SDLViewer> SDLViewer::open(std::shared_ptr<BounceDeskClient> client) {
-  SDLViewer viewer;
-  viewer.client_ = client;
-  viewer.app_loop_ = std::thread(&SDLViewer::app_loop, &viewer);
+StatusOr<std::unique_ptr<SDLViewer>> SDLViewer::open(
+    std::shared_ptr<BounceDeskClient> client) {
+  std::unique_ptr<SDLViewer> viewer =
+      std::unique_ptr<SDLViewer>(new SDLViewer());
+  viewer->client_ = client;
+  viewer->app_loop_ = std::thread(&SDLViewer::app_loop, viewer.get());
   return viewer;
 }
 
@@ -35,28 +37,32 @@ void SDLViewer::app_loop() {
   SDL_Renderer* renderer = nullptr;
   SDL_Texture* texture = nullptr;
 
-  auto check = [&](auto v, std::string msg) {
-    if (v == 0) {
-      fprintf(stderr, "%s failed: %s\n", msg.c_str(), SDL_GetError());
-      fprintf(stderr, "SDLViewer is exiting.\n");
-      if (renderer) SDL_DestroyRenderer(renderer);
-      if (window) SDL_DestroyWindow(window);
-      SDL_Quit();
-    }
+  auto on_error = [&](std::string msg) {
+    fprintf(stderr, "%s failed: %s\n", msg.c_str(), SDL_GetError());
+    fprintf(stderr, "SDLViewer is exiting.\n");
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
+    SDL_Quit();
+  };
+  auto check_ptr = [&](void* p, std::string msg) {
+    if (p == 0) on_error(msg);
+  };
+  auto check_val = [&](int v, std::string msg) {
+    if (v != 0) on_error(msg);
   };
 
-  check(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER), "SDL_Init");
+  check_val(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER), "SDL_Init");
 
   int w = 1, h = 1;
   window = SDL_CreateWindow("Bounce Viewer", SDL_WINDOWPOS_CENTERED,
                             SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_SHOWN);
-  check(window, "SDL_CreateWindow");
+  check_ptr(window, "SDL_CreateWindow");
   renderer = SDL_CreateRenderer(
       window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-  check(renderer, "SDL_CreateRenderer");
-  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+  check_ptr(renderer, "SDL_CreateRenderer");
+  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
                               SDL_TEXTUREACCESS_STREAMING, w, h);
-  check(texture, "SDL_CreateTexture");
+  check_ptr(texture, "SDL_CreateTexture");
 
   const int FPS = 30;
   const uint32_t frame_ms = 1000 / FPS;
@@ -75,14 +81,14 @@ void SDLViewer::app_loop() {
       h = f.height;
       SDL_SetWindowSize(window, w, h);
       if (texture) SDL_DestroyTexture(texture);
-      texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+      texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
                                   SDL_TEXTUREACCESS_STREAMING, w, h);
-      check(texture, "SDL_CreateTexture (resize)");
+      check_ptr(texture, "SDL_CreateTexture (resize)");
     }
 
     const int pitch = f.width * 4;
-    check(SDL_UpdateTexture(texture, nullptr, f.pixels.get(), pitch),
-          "SDL_UpdateTexture");
+    check_val(SDL_UpdateTexture(texture, nullptr, f.pixels.get(), pitch),
+              "SDL_UpdateTexture");
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, texture, nullptr, nullptr);
     SDL_RenderPresent(renderer);

@@ -1,3 +1,6 @@
+#ifndef SDL_VIEWER_H_
+#define SDL_VIEWER_H_
+
 #include <memory>
 #include <thread>
 
@@ -15,7 +18,8 @@ class SDLViewer {
   MOVEABLE_NOT_COPYABLE_CUSTOM(SDLViewer);
 
   // Create a viewer by calling open().
-  static StatusOr<SDLViewer> open(std::shared_ptr<BounceDeskClient> client);
+  static StatusOr<std::unique_ptr<SDLViewer>> open(
+      std::shared_ptr<BounceDeskClient> client);
 
   // Closes the viewer if it's still open.
   ~SDLViewer();
@@ -37,3 +41,5 @@ class SDLViewer {
   std::shared_ptr<BounceDeskClient> client_;
   std::thread app_loop_;
 };
+
+#endif

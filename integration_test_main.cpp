@@ -14,14 +14,12 @@ const int kHeight = 600;
 int main(int argc, char** argv) {
   (void)argc, (void)argv;
 
-  // TODO: Redirect output to files.
   ProcessOutConf out_conf = ProcessOutConf{
       .stdout = StreamOutConf::File("/tmp/bounce_integration_stdout.txt")
                     .value_or_die(),
       .stderr = StreamOutConf::File("/tmp/bounce_integration_stderr.txt")
                     .value_or_die(),
   };
-
   auto backend =
       std::move(WaylandBackend::start_server(
                     5900, kWidth, kHeight,
@@ -35,7 +33,7 @@ int main(int argc, char** argv) {
 
   int x = 0;
   int y = 0;
-  while (!viewer.was_closed()) {
+  while (!viewer->was_closed()) {
     x = (x + 70) % kWidth;
     y = (y + 20) % kHeight;
     client->move_mouse(x, y);
