@@ -21,7 +21,7 @@ StreamOutConf StreamOutConf::File(Fd&& fd) {
 }
 
 StatusOr<StreamOutConf> StreamOutConf::File(const char* filename) {
-  int fd = open(filename, O_WRONLY | O_CREAT, 0644);
+  int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd == -1) {
     if (errno == ENOENT) {
       return InvalidArgumentError(
