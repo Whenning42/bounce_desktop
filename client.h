@@ -5,9 +5,11 @@
 #include <stdint.h>
 
 #include <atomic>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "frame.h"
 #include "third_party/status/status_or.h"
@@ -45,6 +47,7 @@ class BounceDeskClient {
 
   // Exposed to simplify vnc_loop() implementation. Not part of the public API.
   void resize(int w, int h);
+  void fb_update();
   std::atomic<bool> initialized_ = false;
 
  protected:
@@ -63,6 +66,9 @@ class BounceDeskClient {
   VncFramebuffer* fb_ = nullptr;
   GMainLoop* main_loop_ = nullptr;
   std::atomic<bool> exited_ = false;
+
+  std::mutex pending_requests_mu_;
+  std::vector<std::promise<Frame>*> pending_requests_;
 
   int mouse_x_ = 10;
   int mouse_y_ = 10;

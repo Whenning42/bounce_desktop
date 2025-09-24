@@ -62,9 +62,9 @@ void on_resize(VncConnection* c, uint16_t width, uint16_t height, void* data) {
 
 void on_framebuffer_update(VncConnection* c, uint16_t x, uint16_t y,
                            uint16_t width, uint16_t height, void* data) {
-  (void)c, (void)x, (void)y, (void)data;
-  CHECK(
-      vnc_connection_framebuffer_update_request(c, false, 0, 0, width, height));
+  (void)c, (void)x, (void)y, (void)width, (void)height, (void)data;
+  auto client = (BounceDeskClient*)g_object_get_data(G_OBJECT(c), kPtrKey);
+  client->fb_update();
 }
 
 void on_error(VncConnection* c, const char* msg, void* data) {
@@ -152,31 +152,59 @@ void BounceDeskClient::resize(int width, int height) {
                                                   height));
 }
 
-struct GetFrameData {
-  std::promise<Frame> frame;
-  BounceDeskClient* ptr;
-};
-int invoke_get_frame(void* data) {
-  GetFrameData* f = (GetFrameData*)data;
-  f->frame.set_value(f->ptr->get_frame_impl());
+static int request_frame(void* data) {
+  VncConnection* c = (VncConnection*)data;
+  int width = vnc_connection_get_width(c);
+  int height = vnc_connection_get_height(c);
+  vnc_connection_framebuffer_update_request(c, false, 0, 0, width, height);
   return G_SOURCE_REMOVE;
 }
 Frame BounceDeskClient::get_frame() {
-  GetFrameData f;
-  f.ptr = this;
-  g_main_context_invoke(NULL, invoke_get_frame, &f);
-  auto fr = f.frame.get_future().get();
-  return fr;
+  std::promise<Frame>* request = new std::promise<Frame>();
+  {
+    std::lock_guard l(pending_requests_mu_);
+    pending_requests_.push_back(request);
+  }
+  g_main_context_invoke(NULL, request_frame, c_);
+  std::future<Frame> future = request->get_future();
+  if (future.wait_for(3s) == std::future_status::timeout) {
+    FATAL("Failed to receive requested frame.");
+  }
+  Frame f = future.get();
+  delete request;
+  return f;
 }
 
-Frame BounceDeskClient::get_frame_impl() {
-  int w = vnc_framebuffer_get_width(fb_);
-  int h = vnc_framebuffer_get_height(fb_);
-  const uint8_t* buffer = vnc_framebuffer_get_buffer(fb_);
-  size_t size = 4 * w * h;
-  uint8_t* fb_copy = (uint8_t*)malloc(size);
-  memcpy(fb_copy, buffer, size);
-  return Frame{.width = w, .height = h, .pixels = UniquePtrBuf(fb_copy)};
+// Create a frame from the buffer held by 'fb' and allocate a new uninitialized
+// buffer into fb.
+static Frame move_frame(VncConnection* c, VncFramebuffer** fb_ptr) {
+  // libgvnc doesn't expose a way to change the buffer of a VncFramebuffer,
+  // so we create a new VncFramebuffer every time we want to take the
+  // buffer from the vnc and create a new one in its place.
+  VncFramebuffer* fb = *fb_ptr;
+  int width = vnc_framebuffer_get_width(fb);
+  int height = vnc_framebuffer_get_height(fb);
+  uint8_t* old_buffer = vnc_framebuffer_get_buffer(fb);
+  uint8_t* new_buffer = (uint8_t*)malloc(4 * width * height);
+  const VncPixelFormat* local_format = vnc_framebuffer_get_local_format(fb);
+  const VncPixelFormat* remote_format = vnc_framebuffer_get_remote_format(fb);
+
+  Frame f{.width = width, .height = height, .pixels = UniquePtrBuf(old_buffer)};
+  *fb_ptr = VNC_FRAMEBUFFER(vnc_base_framebuffer_new(
+      new_buffer, width, height, 4 * width, local_format, remote_format));
+  vnc_connection_set_framebuffer(c, *fb_ptr);
+  g_object_unref(fb);
+  return f;
+}
+void BounceDeskClient::fb_update() {
+  std::lock_guard l(pending_requests_mu_);
+  if (pending_requests_.size() == 0) {
+    return;
+  }
+
+  Frame f = move_frame(c_, &fb_);
+  pending_requests_[0]->set_value(std::move(f));
+  pending_requests_.erase(pending_requests_.begin());
 }
 
 void BounceDeskClient::vnc_loop() {
