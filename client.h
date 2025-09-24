@@ -1,9 +1,10 @@
 #ifndef CLIENT_H_
 #define CLIENT_H_
 
-#include <rfb/rfbclient.h>
+#include <gvnc-1.0/gvnc.h>
 #include <stdint.h>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -23,7 +24,12 @@ class BounceDeskClient {
   BounceDeskClient(BounceDeskClient&&) = delete;
   BounceDeskClient& operator=(BounceDeskClient&&) = delete;
 
+  // Note: Any of these public API calls can only be called outside
+  // of our internal glib main thread. They'll deadlock if called from
+  // the glib thread.
   Frame get_frame();
+  // Shouldn't be called directly.
+  Frame get_frame_impl();
 
   // Key press and releases expect X11 keysyms.
   void key_press(int keysym);
@@ -39,7 +45,7 @@ class BounceDeskClient {
 
   // Exposed to simplify vnc_loop() implementation. Not part of the public API.
   void resize(int w, int h);
-  void update(int x, int y, int w, int h);
+  std::atomic<bool> initialized_ = false;
 
  protected:
   StatusVal connect_impl(int32_t port);
@@ -50,11 +56,13 @@ class BounceDeskClient {
   void send_pointer_event();
 
   int port_;
-  std::mutex client_mu_;
-  rfbClient* client_;
-  std::atomic<bool> stop_vnc_ = false;
   std::thread vnc_loop_;
   Frame frame_;
+
+  VncConnection* c_ = nullptr;
+  VncFramebuffer* fb_ = nullptr;
+  GMainLoop* main_loop_ = nullptr;
+  std::atomic<bool> exited_ = false;
 
   int mouse_x_ = 10;
   int mouse_y_ = 10;

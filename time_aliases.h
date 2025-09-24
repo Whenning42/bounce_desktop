@@ -11,7 +11,7 @@
 using namespace std::chrono_literals;
 using std::this_thread::sleep_for;
 
-std::chrono::_V2::steady_clock::time_point sc_now() {
+inline std::chrono::_V2::steady_clock::time_point sc_now() {
   return std::chrono::steady_clock::now();
 }
 

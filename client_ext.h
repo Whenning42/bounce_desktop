@@ -17,8 +17,8 @@ class Desktop : public BounceDeskClient {
 
   // Hide BounceDeskClient methods that don't belong in Desktop's interface.
   using BounceDeskClient::connect;
+  using BounceDeskClient::get_frame_impl;
   using BounceDeskClient::resize;
-  using BounceDeskClient::update;
 
   std::unique_ptr<WaylandBackend> backend_;
 };

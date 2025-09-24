@@ -1,21 +1,95 @@
 #include "client.h"
 
+#include <gvnc-1.0/gvnc.h>
 #include <string.h>
 
 #include <cassert>
+#include <future>
 #include <thread>
 
 #include "mouse_button.h"
 #include "third_party/status/status_or.h"
+#include "time_aliases.h"
+
+const char* kPtrKey = "inst";
+const uint32_t kUnusedScancode = 0;
 
 namespace {
-int32_t fb_size(int w, int h) { return w * h * 4; }
+VncPixelFormat* local_format() {
+  static bool init = false;
+  static VncPixelFormat* fmt = vnc_pixel_format_new();
+  if (!init) {
+    init = true;
+    fmt->depth = 24;
+    fmt->bits_per_pixel = 32;
+    fmt->red_max = 255;
+    fmt->blue_max = 255;
+    fmt->green_max = 255;
+    // TODO: Figure out exactly how pixel formats work?
+    // Buffer seems to come back BGRA regardless of what we
+    // set for these shifts?
+    fmt->red_shift = 16;
+    fmt->green_shift = 8;
+    fmt->blue_shift = 0;
+    fmt->true_color_flag = 1;
+  }
+  return fmt;
+}
+
+const VncPixelFormat* remote_format(VncConnection* c) {
+  const VncPixelFormat* r = vnc_connection_get_pixel_format(c);
+  return r ? r : local_format();
+}
+
+void on_connected(VncConnection* c, void* data) { (void)c, (void)data; }
+
+void on_initialized(VncConnection* c, void* data) {
+  (void)data;
+  auto client = (BounceDeskClient*)g_object_get_data(G_OBJECT(c), kPtrKey);
+  int width = vnc_connection_get_width(c);
+  int height = vnc_connection_get_height(c);
+  client->resize(width, height);
+  CHECK(
+      vnc_connection_framebuffer_update_request(c, false, 0, 0, width, height));
+  client->initialized_ = true;
+}
+
+void on_resize(VncConnection* c, uint16_t width, uint16_t height, void* data) {
+  (void)data;
+  auto client = (BounceDeskClient*)g_object_get_data(G_OBJECT(c), kPtrKey);
+  client->resize(width, height);
+}
+
+void on_framebuffer_update(VncConnection* c, uint16_t x, uint16_t y,
+                           uint16_t width, uint16_t height, void* data) {
+  (void)c, (void)x, (void)y, (void)data;
+  CHECK(
+      vnc_connection_framebuffer_update_request(c, false, 0, 0, width, height));
+}
+
+void on_error(VncConnection* c, const char* msg, void* data) {
+  (void)c, (void)data;
+  fprintf(stderr, "================= VNC ERROR: %s ===============\n", msg);
+}
+
 }  // namespace
 
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
     int32_t port) {
   auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
   RETURN_IF_ERROR(client->connect_impl(port));
+
+  // Block until the client's finished start up so that subsequent member
+  // functions don't race with the start up.
+  auto start = sc_now();
+  while (sc_now() - start < 5s) {
+    if (client->initialized_) break;
+    sleep_for(50us);
+  }
+  if (!client->initialized_) {
+    return InternalError(
+        "Failed to initialize vnc client connection to server.");
+  }
   return client;
 }
 
@@ -25,141 +99,135 @@ StatusVal BounceDeskClient::connect_impl(int32_t port) {
   return OkStatus();
 }
 
-void BounceDeskClient::resize(int width, int height) {
-  if (client_->frameBuffer) {
-    free(client_->frameBuffer);
-    client_->frameBuffer = nullptr;
-  }
-  client_->width = width;
-  client_->height = height;
-  client_->frameBuffer = (uint8_t*)malloc(4 * width * height);
-};
-
-void BounceDeskClient::update(int x, int y, int w, int h) {
-  (void)x, (void)y, (void)w, (void)h;
-  if (!client_->frameBuffer) {
-    ERROR("Framebuffer is null!");
-    return;
-  }
-};
+static gboolean shutdown(void* loop) {
+  g_main_loop_quit((GMainLoop*)(loop));
+  return G_SOURCE_REMOVE;
+}
 
 BounceDeskClient::~BounceDeskClient() {
-  stop_vnc_ = true;
+  if (main_loop_) {
+    g_main_context_invoke(NULL, shutdown, main_loop_);
+  }
+  while (!exited_) {
+    sleep_for(50ms);
+  }
+  if (fb_) {
+    auto* buf = vnc_framebuffer_get_buffer(fb_);
+    if (buf) free(buf);
+    g_object_unref(fb_);
+    fb_ = nullptr;
+  }
+  if (c_) {
+    g_object_unref(c_);
+    c_ = nullptr;
+  }
   if (vnc_loop_.joinable()) {
     vnc_loop_.join();
   }
-  if (client_ && client_->frameBuffer) {
-    free(client_->frameBuffer);
-    client_->frameBuffer = nullptr;
-  }
-  if (client_) {
-    rfbClientCleanup(client_);
-  }
 }
 
+void BounceDeskClient::resize(int width, int height) {
+  int old_width = -1;
+  int old_height = -1;
+  uint8_t* buffer;
+  if (fb_) {
+    old_width = vnc_framebuffer_get_width(fb_);
+    old_height = vnc_framebuffer_get_height(fb_);
+    if (old_width == width && old_height == height) {
+      return;
+    }
+
+    buffer = vnc_framebuffer_get_buffer(fb_);
+    if (buffer) {
+      free(buffer);
+    }
+    g_object_unref(fb_);
+  }
+
+  buffer = (uint8_t*)malloc(width * height * 4);
+  fb_ = VNC_FRAMEBUFFER(vnc_base_framebuffer_new(
+      buffer, width, height, 4 * width, local_format(), remote_format(c_)));
+  CHECK(vnc_connection_set_framebuffer(c_, fb_));
+  CHECK(vnc_connection_framebuffer_update_request(c_, false, 0, 0, width,
+                                                  height));
+}
+
+struct GetFrameData {
+  std::promise<Frame> frame;
+  BounceDeskClient* ptr;
+};
+int invoke_get_frame(void* data) {
+  GetFrameData* f = (GetFrameData*)data;
+  f->frame.set_value(f->ptr->get_frame_impl());
+  return G_SOURCE_REMOVE;
+}
 Frame BounceDeskClient::get_frame() {
-  std::lock_guard l(client_mu_);
-  int w = client_->width;
-  int h = client_->height;
-  size_t size = fb_size(w, h);
+  GetFrameData f;
+  f.ptr = this;
+  g_main_context_invoke(NULL, invoke_get_frame, &f);
+  auto fr = f.frame.get_future().get();
+  return fr;
+}
+
+Frame BounceDeskClient::get_frame_impl() {
+  int w = vnc_framebuffer_get_width(fb_);
+  int h = vnc_framebuffer_get_height(fb_);
+  const uint8_t* buffer = vnc_framebuffer_get_buffer(fb_);
+  size_t size = 4 * w * h;
   uint8_t* fb_copy = (uint8_t*)malloc(size);
-  memcpy(fb_copy, client_->frameBuffer, size);
+  memcpy(fb_copy, buffer, size);
   return Frame{.width = w, .height = h, .pixels = UniquePtrBuf(fb_copy)};
 }
 
-// Begin VNC-loop
-namespace {
-rfbBool call_resize(rfbClient* client) {
-  BounceDeskClient* desk =
-      (BounceDeskClient*)rfbClientGetClientData(client, nullptr);
-  assert(desk);
-  desk->resize(client->width, client->height);
-  return TRUE;
-}
-
-void call_update(rfbClient* client, int x, int y, int w, int h) {
-  BounceDeskClient* desk =
-      (BounceDeskClient*)rfbClientGetClientData(client, nullptr);
-  assert(desk);
-  desk->update(x, y, w, h);
-}
-
-void rfb_client_log(const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
-}
-
-rfbCredential* unexpected_credential_error(rfbClient* client,
-                                           int credential_type) {
-  (void)client;
-  ERROR("Asked for credential of type: %d", credential_type);
-  exit(1);
-}
-}  // namespace
-
 void BounceDeskClient::vnc_loop() {
-  client_ = rfbGetClient(/*bitsPerSample=*/8, /*samplesPerPixel=*/3,
-                         /*bytesPerPixel*/ 4);
-  rfbClientSetClientData(client_, /*tag=*/nullptr, this);
+  c_ = vnc_connection_new();
+  g_object_set_data(G_OBJECT(c_), kPtrKey, this);
 
-  // Note: We don't support any clipboard behavior.
-  // TODO: Consider setting rfbClientLog to a logging function.
-  rfbClientLog = rfb_client_log;
-  static const char* server_host = "localhost";
-  client_->serverHost = strdup(server_host);
-  client_->serverPort = port_;
+  int enc[] = {VNC_CONNECTION_ENCODING_RAW,
+               VNC_CONNECTION_ENCODING_EXTENDED_DESKTOP_RESIZE,
+               VNC_CONNECTION_ENCODING_DESKTOP_RESIZE};
+  CHECK(vnc_connection_set_encodings(c_, sizeof(enc) / sizeof(enc[0]), enc));
+  CHECK(vnc_connection_set_pixel_format(c_, local_format()));
+  CHECK(vnc_connection_set_auth_type(c_, VNC_CONNECTION_AUTH_NONE));
+  g_signal_connect(c_, "vnc-connected", G_CALLBACK(on_connected), NULL);
+  g_signal_connect(c_, "vnc-initialized", G_CALLBACK(on_initialized), this);
+  g_signal_connect(c_, "vnc-desktop-resize", G_CALLBACK(on_resize), NULL);
+  g_signal_connect(c_, "vnc-framebuffer-update",
+                   G_CALLBACK(on_framebuffer_update), NULL);
+  g_signal_connect(c_, "vnc-error", G_CALLBACK(on_error), NULL);
 
-  client_->MallocFrameBuffer = call_resize;
-  client_->canHandleNewFBSize = TRUE;
-  client_->GotFrameBufferUpdate = call_update;
-  client_->GetCredential = unexpected_credential_error;
+  std::string port_str = std::to_string(port_);
+  CHECK(vnc_connection_open_host(c_, "127.0.0.1", port_str.c_str()));
 
-  int client_argc = 3;
-  const char* client_argv[] = {"bounce_vnc", "-encodings", "raw"};
-  if (!rfbInitClient(client_, &client_argc, (char**)client_argv)) {
-    ERROR("Failed to start the server");
-    return;
-  }
-
-  while (!stop_vnc_) {
-    int r;
-    // Sleep a bit every loop iteration to allow client requests the chance to
-    // acquire the client mutex.
-    // A cleaner implementation would be to have client requests outside of this
-    // thread thread push events to be processed by this thread, and avoid
-    // locking around the client altogether, but this is simple enough and
-    // should work fairly well for now.
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    {
-      std::lock_guard l(client_mu_);
-      r = WaitForMessage(client_, 1'000);
-    }
-    if (r < 0) ERROR("Wait for message error: %d", r);
-    if (r == 0) continue;
-
-    rfbBool ret;
-    {
-      std::lock_guard l(client_mu_);
-      ret = HandleRFBServerMessage(client_);
-    }
-    if (ret == FALSE) {
-      ERROR("Couldn't handle rfb server message");
-      break;
-    }
-  }
+  main_loop_ = g_main_loop_new(NULL, false);
+  g_main_loop_run(main_loop_);
+  g_main_loop_unref(main_loop_);
+  exited_ = true;
 }
-// End VNC-loop
+
+struct DoKeyEvent {
+  VncConnection* c;
+  bool down;
+  int keysym;
+  std::promise<bool> ret = std::promise<bool>();
+};
+static int do_key_event(void* data) {
+  DoKeyEvent* ke = (DoKeyEvent*)(data);
+  CHECK(vnc_connection_key_event(ke->c, ke->down, ke->keysym, kUnusedScancode));
+  ke->ret.set_value(true);
+  return G_SOURCE_REMOVE;
+}
 
 void BounceDeskClient::key_press(int keysym) {
-  std::lock_guard l(client_mu_);
-  SendKeyEvent(client_, keysym, /*down=*/true);
+  DoKeyEvent ke = DoKeyEvent{.c = c_, .down = true, .keysym = keysym};
+  g_main_context_invoke(NULL, do_key_event, &ke);
+  ke.ret.get_future().get();
 }
 
 void BounceDeskClient::key_release(int keysym) {
-  std::lock_guard l(client_mu_);
-  SendKeyEvent(client_, keysym, /*down=*/false);
+  DoKeyEvent ke = DoKeyEvent{.c = c_, .down = false, .keysym = keysym};
+  g_main_context_invoke(NULL, do_key_event, &ke);
+  ke.ret.get_future().get();
 }
 
 void BounceDeskClient::move_mouse(int x, int y) {
@@ -178,7 +246,27 @@ void BounceDeskClient::mouse_release(int button) {
   send_pointer_event();
 }
 
+struct DoPointerEvent {
+  VncConnection* c;
+  int mask;
+  int x;
+  int y;
+  std::promise<bool> ret = std::promise<bool>();
+};
+static int do_pointer_event(void* data) {
+  DoPointerEvent* pe = (DoPointerEvent*)(data);
+  CHECK(vnc_connection_pointer_event(pe->c, pe->mask, pe->x, pe->y));
+  pe->ret.set_value(true);
+  return G_SOURCE_REMOVE;
+}
+
 void BounceDeskClient::send_pointer_event() {
-  std::lock_guard l(client_mu_);
-  SendPointerEvent(client_, mouse_x_, mouse_y_, button_mask_);
+  DoPointerEvent pe{
+      .c = c_,
+      .mask = button_mask_,
+      .x = mouse_x_,
+      .y = mouse_y_,
+  };
+  g_main_context_invoke(NULL, do_pointer_event, &pe);
+  pe.ret.get_future().get();
 }

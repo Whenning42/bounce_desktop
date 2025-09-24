@@ -10,8 +10,6 @@ gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
 
-test_deps = [gtest_dep, gmock_dep]
-
 # Note: We dynamically link GPL'd libvncclient/server.
 # if this is a problem, we can migrate to gtk-vnc as our
 # client and we can GPL our mock_vnc_server which is our
@@ -20,8 +18,10 @@ test_deps = [gtest_dep, gmock_dep]
 # TODO: Consider migrating onto gtk-vnc.
 #
 # gtk-vnc docs link: https://lazka.github.io/pgi-docs/GVnc-1.0/index.html
-vncclient_dep = dependency('libvncclient', static: false)
+gvnc_dep = dependency('gvnc-1.0')
 vncserver_dep = dependency('libvncserver', static: false)
+
+test_deps = [gtest_dep, gmock_dep, gvnc_dep]
 
 bouncedesk_sources = [
   'client.cpp',
@@ -40,7 +40,7 @@ bouncedesk_sources = [
 
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
-  dependencies : [vncclient_dep, vncserver_dep, sdl2_dep],
+  dependencies : [gvnc_dep, vncserver_dep, sdl2_dep],
 )
 
 reaper_sources = [
@@ -110,14 +110,14 @@ stdout_poc = executable('stdout_poc',
   link_with : bouncedesk_lib,
 )
 
-integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib)
+integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib, dependencies: [gvnc_dep])
 
-test('client_test', client_test, workdir : meson.source_root())
-test('reaper_test', reaper_test, workdir : meson.source_root())
-test('ipc_test', ipc_test, workdir : meson.source_root())
-test('display_vars_test', display_vars_test, workdir : meson.source_root())
-test('process_test', process_test, workdir : meson.source_root())
-test('launch_weston_test', launch_weston_test, workdir : meson.source_root())
+test('client_test', client_test, workdir : meson.project_source_root())
+test('reaper_test', reaper_test, workdir : meson.project_source_root())
+test('ipc_test', ipc_test, workdir : meson.project_source_root())
+test('display_vars_test', display_vars_test, workdir : meson.project_source_root())
+test('process_test', process_test, workdir : meson.project_source_root())
+test('launch_weston_test', launch_weston_test, workdir : meson.project_source_root())
 
 # Python extension module (optional)
 python3 = import('python').find_installation('python3', required: false)
@@ -135,7 +135,7 @@ if python3.found() and nanobind_dep.found()
   # Build Python extension
   python3.extension_module('bounce_desk',
     py_sources,
-    dependencies: [nanobind_dep],
+    dependencies: [nanobind_dep, gvnc_dep],
     link_with: bouncedesk_lib,
     cpp_args: py_cpp_args,
     override_options: [
@@ -150,7 +150,7 @@ if python3.found() and nanobind_dep.found()
     python3,
     args: [files('bounce_desk_test.py')],
     env: {'PYTHONPATH': meson.current_build_dir()},
-    workdir : meson.source_root()
+    workdir : meson.project_source_root()
   )
 endif
 

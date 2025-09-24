@@ -60,7 +60,7 @@ void SDLViewer::app_loop() {
   renderer = SDL_CreateRenderer(
       window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   check_ptr(renderer, "SDL_CreateRenderer");
-  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA8888,
                               SDL_TEXTUREACCESS_STREAMING, w, h);
   check_ptr(texture, "SDL_CreateTexture");
 
@@ -81,7 +81,7 @@ void SDLViewer::app_loop() {
       h = f.height;
       SDL_SetWindowSize(window, w, h);
       if (texture) SDL_DestroyTexture(texture);
-      texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+      texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA8888,
                                   SDL_TEXTUREACCESS_STREAMING, w, h);
       check_ptr(texture, "SDL_CreateTexture (resize)");
     }
