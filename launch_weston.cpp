@@ -20,7 +20,10 @@ void set_fd_nonblocking(int fd) {
 bool read_fd(int fd, std::string* out) {
   char buf[1024];
   int r = read(fd, buf, 1023);
-  if (r == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+  if (r == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    return true;
+  }
+  if (r == -1) {
     perror("run weston read");
     return false;
   }
