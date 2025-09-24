@@ -73,5 +73,6 @@ StatusOr<Process> launch_process(const std::vector<std::string>& args,
   for (size_t i = 0; i < args.size(); ++i) {
     free(argv[i]);
   }
+  free(argv);
   return p;
 }
