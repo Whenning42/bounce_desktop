@@ -105,11 +105,6 @@ export_display = executable('export_display',
   ['export_display_main.cpp', 'display_vars.cpp']
 )
 
-stdout_poc = executable('stdout_poc',
-  ['stdout_poc_main.cpp'],
-  link_with : bouncedesk_lib,
-)
-
 integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib, dependencies: [gvnc_dep])
 
 test('client_test', client_test, workdir : meson.project_source_root())
