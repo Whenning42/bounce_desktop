@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "process.h"
+#include "project_root.h"
 
 namespace {
 void set_fd_nonblocking(int fd) {
@@ -71,12 +72,13 @@ StatusVal search_for_error(const std::string& out) {
 
 StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
                              int width, int height) {
-  // TODO: Figure out how to distribute or upstream our authentication
-  // change.
-  setenv("LD_LIBRARY_PATH", "/usr/local/lib", true);
+  EnvVars env = EnvVars::environ();
+  std::string weston_path = project_root() + "/build/weston-fork/install";
+  env.set_var("LD_LIBRARY_PATH", (weston_path + "/lib").c_str());
 
+  printf("Launching file: %s\n", (weston_path + "/bin/weston").c_str());
   std::vector<std::string> weston_command = {
-      "weston",
+      weston_path + "/bin/weston",
       "--xwayland",
       "--backend=vnc",
       "--disable-transport-layer-security",
@@ -91,8 +93,8 @@ StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
       .stdout = StreamOutConf::Pipe(),
       .stderr = StreamOutConf::StdoutPipe(),
   };
-  ASSIGN_OR_RETURN(Process p, launch_process(weston_command, /*env=*/nullptr,
-                                             std::move(stream_conf)));
+  ASSIGN_OR_RETURN(
+      Process p, launch_process(weston_command, &env, std::move(stream_conf)));
   LOG(kLogVnc, "Launched weston as process: %d", p.pid);
   auto start = std::chrono::steady_clock::now();
   auto timeout = std::chrono::seconds(5000);
