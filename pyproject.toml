@@ -1,6 +1,6 @@
 [project]
 name = "bounce_desktop"
-version = "0.0.1"
+version = "0.0.2"
 description = ""
 authors = [
     {name = "William Henning",email = "wchenningwchenning@gmail.com"}

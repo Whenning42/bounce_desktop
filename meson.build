@@ -10,6 +10,7 @@ gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
 weston_proj = subproject('weston-fork', default_options: {
+  'werror': 'false',
   'backend-vnc': 'true',
   'renderer-gl': 'true',
   'backend-headless': 'true',
@@ -20,7 +21,7 @@ weston_proj = subproject('weston-fork', default_options: {
   'backend-x11': 'false',
   'backend-rdp': 'false',
   'remoting': 'false',
-  'pipewire': 'false'
+  'pipewire': 'false',
 })
 
 gvnc_dep = dependency('gvnc-1.0')
