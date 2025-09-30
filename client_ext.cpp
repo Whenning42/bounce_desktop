@@ -24,7 +24,7 @@ std::unique_ptr<Desktop> Desktop::create(
   return desktop;
 }
 
-NB_MODULE(bounce_desk, m) {
+NB_MODULE(bounce_desktop, m) {
   nb::class_<Desktop>(m, "Desktop")
       .def("create", &Desktop::create)
       .def("key_press", &Desktop::key_press)

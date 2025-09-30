@@ -1,7 +1,7 @@
 import unittest
 
 try:
-    from bounce_desk import Desktop
+    from bounce_desktop import Desktop
 except ImportError:
     print("Failed to import bounce_desk. Exiting.")
     exit(1)

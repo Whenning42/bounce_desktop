@@ -1,0 +1,18 @@
+[project]
+name = "bounce_desktop"
+version = "0.0.1"
+description = ""
+authors = [
+    {name = "William Henning",email = "wchenningwchenning@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "readme.md"
+requires-python = ">=3.9"
+
+[build-system]
+requires = ["meson-python>=0.15.0", "nanobind>=1.8.0"]
+build-backend = "mesonpy"
+
+# Note: We don't ship wheels, since building our vendored patched Weston
+# would be too challenging, due to its many dependencies. If we upstream
+# our patches, then we'd have the option of building and shipping wheels.

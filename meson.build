@@ -1,4 +1,4 @@
-project('bouncedesk', 'cpp',
+project('bounce_desktop', 'cpp',
   version : '0.1.0',
   default_options : ['cpp_std=c++20',
                      'cpp_eh=none',
@@ -9,16 +9,22 @@ project('bouncedesk', 'cpp',
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
+weston_proj = subproject('weston-fork', default_options: {
+  'backend-vnc': 'true',
+  'renderer-gl': 'true',
+  'backend-headless': 'true',
+  'backend-default': 'headless',
+  'renderer-vulkan': 'false',
+  'backend-drm': 'false',
+  'backend-wayland': 'false',
+  'backend-x11': 'false',
+  'backend-rdp': 'false',
+  'remoting': 'false',
+  'pipewire': 'false'
+})
 
-# Note: We dynamically link GPL'd libvncclient/server.
-# if this is a problem, we can migrate to gtk-vnc as our
-# client and we can GPL our mock_vnc_server which is our
-# only libvncserver consumer.
-#
-# TODO: Consider migrating onto gtk-vnc.
-#
-# gtk-vnc docs link: https://lazka.github.io/pgi-docs/GVnc-1.0/index.html
 gvnc_dep = dependency('gvnc-1.0')
+# Note: Avoid non-test uses of libvncclient/libvncserver to avoid GPL issues.
 vncserver_dep = dependency('libvncserver', static: false)
 
 test_deps = [gtest_dep, gmock_dep, gvnc_dep]
@@ -114,38 +120,31 @@ test('display_vars_test', display_vars_test, workdir : meson.project_source_root
 test('process_test', process_test, workdir : meson.project_source_root())
 test('launch_weston_test', launch_weston_test, workdir : meson.project_source_root())
 
-# Python extension module (optional)
+# Python extension module
 python3 = import('python').find_installation('python3', required: false)
 nanobind_dep = dependency('nanobind')
 
-if python3.found() and nanobind_dep.found()
-  py_cpp_args = []
+py_sources = [
+  'client_ext.cpp',
+  'third_party/status/exceptions.h',
+]
 
-  # Python extension sources
-  py_sources = [
-    'client_ext.cpp',
-    'third_party/status/exceptions.h',
-  ]
-  
-  # Build Python extension
-  python3.extension_module('bounce_desk',
-    py_sources,
-    dependencies: [nanobind_dep, gvnc_dep],
-    link_with: bouncedesk_lib,
-    cpp_args: py_cpp_args,
-    override_options: [
-      'cpp_rtti=true',
-      'cpp_eh=default',
-      'warning_level=2',
-    ]
-  )
-  
-  # Python tests
-  test('bounce_desk_test',
-    python3,
-    args: [files('bounce_desk_test.py')],
-    env: {'PYTHONPATH': meson.current_build_dir()},
-    workdir : meson.project_source_root()
-  )
-endif
+python3.extension_module('bounce_desktop',
+  py_sources,
+  dependencies: [nanobind_dep, gvnc_dep],
+  link_with: bouncedesk_lib,
+  cpp_args: [],
+  override_options: [
+    'cpp_rtti=true',
+    'cpp_eh=default',
+    'warning_level=2',
+  ],
+  install_rpath: '$ORIGIN',
+)
 
+test('bounce_desk_test',
+  python3,
+  args: [files('bounce_desk_test.py')],
+  env: {'PYTHONPATH': meson.current_build_dir()},
+  workdir : meson.project_source_root()
+)

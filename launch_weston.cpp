@@ -73,12 +73,12 @@ StatusVal search_for_error(const std::string& out) {
 StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
                              int width, int height) {
   EnvVars env = EnvVars::environ();
-  std::string weston_path = project_root() + "/build/weston-fork/install";
-  env.set_var("LD_LIBRARY_PATH", (weston_path + "/lib").c_str());
+  std::string weston_exe_path =
+      project_root() + "/build/subprojects/weston-fork/frontend/weston";
 
-  printf("Launching file: %s\n", (weston_path + "/bin/weston").c_str());
+  printf("Launching file: %s\n", weston_exe_path.c_str());
   std::vector<std::string> weston_command = {
-      weston_path + "/bin/weston",
+      weston_exe_path,
       "--xwayland",
       "--backend=vnc",
       "--disable-transport-layer-security",

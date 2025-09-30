@@ -1,3 +1,6 @@
 [submodule "third_party/weston-fork"]
 	path = third_party/weston-fork
 	url = git@github.com:Whenning42/weston-fork.git
+[submodule "subprojects/weston-fork"]
+	path = subprojects/weston-fork
+	url = git@github.com:Whenning42/weston-fork.git
