@@ -62,9 +62,9 @@ class BounceDeskClient {
   std::thread vnc_loop_;
   Frame frame_;
 
+  std::atomic<bool> exit_ = false;
   VncConnection* c_ = nullptr;
   VncFramebuffer* fb_ = nullptr;
-  GMainLoop* main_loop_ = nullptr;
   std::atomic<bool> exited_ = false;
 
   std::mutex pending_requests_mu_;

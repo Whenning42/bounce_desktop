@@ -67,9 +67,19 @@ void on_framebuffer_update(VncConnection* c, uint16_t x, uint16_t y,
   client->fb_update();
 }
 
+void on_auth_failure(VncConnection* c, const char* reason, void* data) {
+  (void)c, (void)data;
+  ERROR("============= VNC AUTH FAILURE: %s ============\n", reason);
+}
+
+void on_auth_unsupported(VncConnection* c, int auth_type, void* data) {
+  (void)c, (void)data;
+  ERROR("============= VNC AUTH UNSUPPORTED: %d ============\n", auth_type);
+}
+
 void on_error(VncConnection* c, const char* msg, void* data) {
   (void)c, (void)data;
-  fprintf(stderr, "================= VNC ERROR: %s ===============\n", msg);
+  ERROR("================= VNC ERROR: %s ===============\n", msg);
 }
 
 }  // namespace
@@ -78,49 +88,38 @@ StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
     int32_t port) {
   auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
   RETURN_IF_ERROR(client->connect_impl(port));
-
-  // Block until the client's finished start up so that subsequent member
-  // functions don't race with the start up.
-  auto start = sc_now();
-  while (sc_now() - start < 5s) {
-    if (client->initialized_) break;
-    sleep_for(50us);
-  }
-  if (!client->initialized_) {
-    return InternalError(
-        "Failed to initialize vnc client connection to server.");
-  }
   return client;
 }
 
 StatusVal BounceDeskClient::connect_impl(int32_t port) {
   port_ = port;
   vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, this);
+
+  // Block until the client's finished start up so that subsequent member
+  // functions don't race with the start up.
+  auto start = sc_now();
+  while (sc_now() - start < 5s) {
+    if (initialized_) break;
+    sleep_for(50us);
+  }
+  if (!initialized_) {
+    return InternalError(
+        "Failed to initialize vnc client connection to server.");
+  }
+
   return OkStatus();
 }
 
-static gboolean shutdown(void* loop) {
-  g_main_loop_quit((GMainLoop*)(loop));
-  return G_SOURCE_REMOVE;
-}
-
 BounceDeskClient::~BounceDeskClient() {
-  if (main_loop_) {
-    g_main_context_invoke(NULL, shutdown, main_loop_);
-  }
+  exit_ = true;
+  vnc_connection_shutdown(c_);
+  g_main_context_wakeup(NULL);
+
   while (!exited_) {
+    printf("Waiting for exited signal\n");
     sleep_for(50ms);
   }
-  if (fb_) {
-    auto* buf = vnc_framebuffer_get_buffer(fb_);
-    if (buf) free(buf);
-    g_object_unref(fb_);
-    fb_ = nullptr;
-  }
-  if (c_) {
-    g_object_unref(c_);
-    c_ = nullptr;
-  }
+  printf("Received exited signal\n");
   if (vnc_loop_.joinable()) {
     vnc_loop_.join();
   }
@@ -217,19 +216,34 @@ void BounceDeskClient::vnc_loop() {
   CHECK(vnc_connection_set_encodings(c_, sizeof(enc) / sizeof(enc[0]), enc));
   CHECK(vnc_connection_set_pixel_format(c_, local_format()));
   CHECK(vnc_connection_set_auth_type(c_, VNC_CONNECTION_AUTH_NONE));
+
   g_signal_connect(c_, "vnc-connected", G_CALLBACK(on_connected), NULL);
   g_signal_connect(c_, "vnc-initialized", G_CALLBACK(on_initialized), this);
   g_signal_connect(c_, "vnc-desktop-resize", G_CALLBACK(on_resize), NULL);
   g_signal_connect(c_, "vnc-framebuffer-update",
                    G_CALLBACK(on_framebuffer_update), NULL);
+  g_signal_connect(c_, "vnc-auth-failure", G_CALLBACK(on_auth_failure), NULL);
+  g_signal_connect(c_, "vnc-auth-unsupported", G_CALLBACK(on_auth_unsupported),
+                   NULL);
   g_signal_connect(c_, "vnc-error", G_CALLBACK(on_error), NULL);
 
   std::string port_str = std::to_string(port_);
   CHECK(vnc_connection_open_host(c_, "127.0.0.1", port_str.c_str()));
 
-  main_loop_ = g_main_loop_new(NULL, false);
-  g_main_loop_run(main_loop_);
-  g_main_loop_unref(main_loop_);
+  while (!exit_ || g_main_context_pending(NULL)) {
+    g_main_context_iteration(NULL, /*may_block=*/true);
+  }
+  if (c_) {
+    g_object_unref(c_);
+    c_ = nullptr;
+  }
+  if (fb_) {
+    auto* buf = vnc_framebuffer_get_buffer(fb_);
+    if (buf) free(buf);
+    g_object_unref(fb_);
+    fb_ = nullptr;
+  }
+
   exited_ = true;
 }
 

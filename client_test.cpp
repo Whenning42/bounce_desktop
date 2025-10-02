@@ -15,11 +15,10 @@ TEST(Client, get_frame_returns_a_frame) {
   auto backend =
       WaylandBackend::start_server(kPortOffset, 300, 200, {"sleep", "1000"});
   sleep(1);
-  auto client_result = BounceDeskClient::connect((*backend)->port());
-  ASSERT_TRUE(client_result.ok());
-  auto& client = **client_result;
+  ASSERT_OK_AND_ASSIGN(auto client,
+                       BounceDeskClient::connect((*backend)->port()));
 
-  const Frame& frame = client.get_frame();
+  const Frame& frame = client->get_frame();
   EXPECT_EQ(frame.width, 300);
   EXPECT_EQ(frame.height, 200);
 }
