@@ -3,3 +3,4 @@ subprojects/
 .vscode
 todo.txt
 dist/
+build/
