@@ -6,9 +6,9 @@
 
 MATCHER_P(StatusIs, code, "") { return get_status_(arg).code() == code; }
 
-#define ASSERT_OK(a) ASSERT_THAT(a, StatusIs(StatusCode::OK));
+#define ASSERT_OK(a) ASSERT_THAT(a, StatusIs(StatusCode::OK)) << a.to_string();
 
-#define EXPECT_OK(a) EXPECT_THAT(a, StatusIs(StatusCode::OK));
+#define EXPECT_OK(a) EXPECT_THAT(a, StatusIs(StatusCode::OK)) << a.to_string();
 
 #define CAT_VAR(a, b) a##b
 #define CAT_VAR_(a, b) CAT_VAR(a, b)
