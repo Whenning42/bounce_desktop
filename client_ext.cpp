@@ -24,7 +24,9 @@ std::unique_ptr<Desktop> Desktop::create(
   return desktop;
 }
 
-NB_MODULE(bounce_desktop, m) {
+NB_MODULE(_core, m) {
+  nb::module_::import_("numpy");
+
   nb::class_<Desktop>(m, "Desktop")
       .def("create", &Desktop::create)
       .def("key_press", &Desktop::key_press)
