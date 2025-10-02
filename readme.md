@@ -5,4 +5,4 @@ with virtual desktops.
 
 # Dependencies
 
-libvncserver, gmock, gtest
+libvncserver (optional), gmock, gtest, libgvnc (from gtk-vnc)
