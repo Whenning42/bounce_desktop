@@ -2,17 +2,42 @@
 name = "bounce_desktop"
 version = "0.0.2" # if changed, update meson.build too.
 description = ""
-authors = [
-    {name = "William Henning",email = "wchenningwchenning@gmail.com"}
-]
-license = {text = "MIT"}
+authors = [{name="William Henning", email="wchenningwchenning@gmail.com"}]
+license = "MIT"
 readme = "readme.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 [build-system]
-requires = ["meson-python>=0.15.0", "nanobind>=1.8.0"]
-build-backend = "mesonpy"
+requires = ["poetry-core>=1.0.0", "meson>=1.0.0", "ninja"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{include = "bounce_desktop"}]
+include = [
+    "meson.build",
+    "makefile",
+    "*.cpp",
+    "*.h",
+    "*.py",
+    "reaper/**/*.cpp",
+    "reaper/**/*.h",
+    "reaper/**/*.tpp",
+    "reaper/**/*.py",
+    "process/**/*.cpp",
+    "process/**/*.h",
+    "third_party/**/*.h",
+    "third_party/**/*.cpp",
+    "subprojects/**/*",
+]
+
 
 # Note: We don't ship wheels, since building our vendored patched Weston
 # would be too challenging, due to its many dependencies. If we upstream
 # our patches, then we'd have the option of building and shipping wheels.
+
+[tool.poetry.build]
+script = "build-extension.py"
+generate-setup-file = false
+
+[tool.poetry.dependencies]
+numpy = "^2.3.3"

@@ -1,0 +1,48 @@
+#ifndef WESTON_PATH_
+#define WESTON_PATH_
+
+#include <dlfcn.h>
+#include <stdio.h>
+
+#include <filesystem>
+#include <string>
+
+#include "time_aliases.h"
+
+inline std::string get_weston_prefix() {
+  // To find our path to vendored weston, we find the path to our build/install
+  // directory and then walk from there to the weston build/install directory.
+  //
+  // We find our build directory by dladdr'ing an arbitrary function, in this
+  // case 'sc_now', and then walking from there.
+  Dl_info dl_info;
+  if (!dladdr((void*)&sc_now, &dl_info)) {
+    return "";
+  }
+
+  std::filesystem::path dl_path(dl_info.dli_fname);
+  std::string path_a = dl_path.parent_path().string() + "/_vendored/weston";
+  if (std::filesystem::exists(path_a)) {
+    return path_a;
+  }
+  return dl_path.parent_path().string() + "/bounce_desktop/_vendored/weston";
+}
+
+inline std::string get_weston_bin() {
+  return get_weston_prefix() + "/bin/weston";
+}
+
+inline std::string get_weston_path() {
+  return get_weston_prefix() + "/libexec";
+}
+
+inline std::string get_weston_lib_path() {
+  return get_weston_prefix() + "/lib/libweston-15" + ":" + get_weston_prefix() +
+         "/lib/weston";
+}
+
+inline std::string get_weston_data_dir() {
+  return get_weston_prefix() + "/share/weston";
+}
+
+#endif

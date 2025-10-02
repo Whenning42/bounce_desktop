@@ -9,6 +9,7 @@
 
 #include "process.h"
 #include "time_aliases.h"
+#include "weston_path.h"
 
 namespace {
 void set_fd_nonblocking(int fd) {
@@ -83,12 +84,12 @@ StatusVal search_for_error(const std::string& out) {
 StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
                              int width, int height) {
   EnvVars env = EnvVars::environ();
-  std::string weston_exe_path =
-      project_root() + "/build/subprojects/weston-fork/frontend/weston";
+  env.prepend_var("LD_LIBRARY_PATH", get_weston_lib_path() + ":");
+  env.prepend_var("PATH", get_weston_path() + ":");
+  env.set_var("WESTON_DATA_DIR", get_weston_data_dir());
 
-  printf("Launching file: %s\n", weston_exe_path.c_str());
   std::vector<std::string> weston_command = {
-      weston_exe_path,
+      get_weston_bin(),
       "--xwayland",
       "--backend=vnc",
       "--disable-transport-layer-security",
