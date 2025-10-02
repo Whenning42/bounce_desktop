@@ -8,7 +8,6 @@
 #include <thread>
 
 #include "process.h"
-#include "project_root.h"
 #include "time_aliases.h"
 
 namespace {
