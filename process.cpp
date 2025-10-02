@@ -60,8 +60,9 @@ StatusOr<Process> launch_process(const std::vector<std::string>& args,
   int r =
       posix_spawnp(&pid, argv[0], &prelaunch.file_actions, nullptr, argv, env);
   if (r != 0) {
-    return InvalidArgumentError("Failed to launch process: " +
-                                libc_error_name(r));
+    return InvalidArgumentError(
+        "Failed to launch process: " + std::string(argv[0]) +
+        " with error: " + libc_error_name(r));
   }
   Process p;
   p.pid = pid;

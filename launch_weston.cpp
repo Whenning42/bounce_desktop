@@ -1,6 +1,7 @@
 #include "launch_weston.h"
 
 #include <fcntl.h>
+#include <stdlib.h>
 
 #include <fstream>
 #include <sstream>
@@ -8,6 +9,7 @@
 
 #include "process.h"
 #include "project_root.h"
+#include "time_aliases.h"
 
 namespace {
 void set_fd_nonblocking(int fd) {
@@ -52,8 +54,12 @@ StatusVal search_for_error(const std::string& out) {
       "Failed to process Wayland connection: Broken pipe";
   const std::string kDisplayPipeFailed =
       "failed to create display: Broken pipe";
+  const std::string kSharedLibraryFailure1 =
+      "error while loading shared libraries";
+  const std::string kSharedLibraryFailure2 = "cannot open shared object file";
 
   if (out.find(kCompositorFailed) != std::string::npos) {
+    printf("Port unavailable message: %s\n", out.c_str());
     return UnavailableError("Port already in use.");
   }
   if (out.find(kWaylandPipeFailed) != std::string::npos) {
@@ -65,6 +71,11 @@ StatusVal search_for_error(const std::string& out) {
   if (out.find(kDisplayPipeFailed) != std::string::npos) {
     return UnknownError(
         "Weston launch failed to create display because of a broken pipe.");
+  }
+  if ((out.find(kSharedLibraryFailure1) != std::string::npos) ||
+      (out.find(kSharedLibraryFailure2) != std::string::npos)) {
+    printf("Shared library stdout: %s\n", out.c_str());
+    return UnknownError("Couldn't find weston shared libraries.");
   }
   return OkStatus();
 }
@@ -96,12 +107,12 @@ StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
   ASSIGN_OR_RETURN(
       Process p, launch_process(weston_command, &env, std::move(stream_conf)));
   LOG(kLogVnc, "Launched weston as process: %d", p.pid);
-  auto start = std::chrono::steady_clock::now();
-  auto timeout = std::chrono::seconds(5000);
+  auto start = sc_now();
   std::string output;
   set_fd_nonblocking(p.stdout.fd());
   int hits = 0;
-  while (std::chrono::steady_clock::now() - start < timeout) {
+  int iter = 0;
+  while (sc_now() - start < 5s) {
     read_fd(p.stdout.fd(), &output);
     RETURN_IF_ERROR(search_for_error(output));
     if (has_child(p.pid)) {
@@ -111,7 +122,16 @@ StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
         return p;
       }
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    iter++;
+    if (iter % 5 == 0) {
+      printf("Waiting for weston launch into a known state.\n");
+      std::chrono::duration<double> duration =
+          std::chrono::duration_cast<std::chrono::duration<double>>(sc_now() -
+                                                                    start);
+      printf("Waited for %f\n", duration.count());
+    }
+    sleep_for(50ms);
   }
   return UnknownError(
       "run_weston() never found weston's child. Maybe the command exited "
@@ -119,5 +139,7 @@ StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
       "executed command ran as a daemon. run_weston() verifies that weston "
       "successfully launched a child in a poll loop and so to correctly handle "
       "quickly exiting daemons, consider running them under a child "
-      "subreaper.");
+      "subreaper.\n\n"
+      "Weston output:\n" +
+      output);
 }
