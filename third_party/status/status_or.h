@@ -74,7 +74,9 @@ class StatusVal {
  public:
   explicit StatusVal(StatusCode code, std::string msg = "")
       : code_(code), msg_(msg) {
-    stack_trace_ = get_backtrace(/*skip_frames=*/2);
+    if (code_ != StatusCode::OK) {
+      stack_trace_ = get_backtrace(/*skip_frames=*/2);
+    }
   }
 
   bool ok() const { return code_ == StatusCode::OK; }
