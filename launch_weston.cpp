@@ -81,8 +81,9 @@ StatusVal search_for_error(const std::string& out) {
 }
 }  // namespace
 
-StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
-                             int width, int height) {
+StatusOr<Process> launch_weston(int port,
+                                const std::vector<std::string>& command,
+                                int width, int height) {
   EnvVars env = EnvVars::environ();
   env.prepend_var("LD_LIBRARY_PATH", get_weston_lib_path() + ":");
   env.prepend_var("PATH", get_weston_path() + ":");

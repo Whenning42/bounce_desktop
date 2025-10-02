@@ -1,6 +1,6 @@
 [project]
 name = "bounce_desktop"
-version = "0.0.2" # if changed, update meson.build too.
+version = "0.0.3" # if changed, update meson.build too.
 description = ""
 authors = [{name="William Henning", email="wchenningwchenning@gmail.com"}]
 license = "MIT"

@@ -5,7 +5,8 @@
 
 #include <thread>
 
-MATCHER_P(StatusIs, code, "") { return get_status_(arg).code() == code; }
+#include "third_party/status/status_gtest.h"
+#include "weston_path.h"
 
 void close_proc(int pid) {
   kill(pid, SIGTERM);
@@ -16,24 +17,24 @@ void close_proc(int pid) {
 }
 
 TEST(LaunchWeston, launch_succeeds) {
-  auto r = run_weston(5950, {"./build/export_display", "test"});
-  EXPECT_TRUE(r.ok()) << r.status().to_string();
+  auto r = launch_weston(5950, {get_export_display_path(), "test"});
+  EXPECT_OK(r)
   if (r.ok()) {
     close_proc(r->pid);
   }
 }
 
 TEST(LaunchWeston, port_taken_gives_unavailable_error) {
-  auto a = run_weston(5951, {"./build/export_display", "test"});
-  auto b = run_weston(5951, {"./build/export_display", "test"});
-  EXPECT_THAT(b, StatusIs(StatusCode::UNAVAILABLE));
+  auto a = launch_weston(5951, {get_export_display_path(), "test"});
+  auto b = launch_weston(5951, {get_export_display_path(), "test"});
+  EXPECT_THAT(b, StatusIs(StatusCode::UNAVAILABLE)) << b.status().to_string();
   if (a.ok()) {
     close_proc(a->pid);
   }
 }
 
 TEST(LaunchWeston, launch_failure_gives_unknown_error) {
-  auto r = run_weston(5952, {"a_command_that_doesnt_exist"});
+  auto r = launch_weston(5952, {"a_command_that_doesnt_exist"});
   EXPECT_FALSE(r.ok());
   EXPECT_THAT(r, StatusIs(StatusCode::UNKNOWN)) << r.to_string();
 }

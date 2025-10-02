@@ -1,12 +1,12 @@
 project('bounce_desktop', 'cpp',
-  version : '0.0.2', # if changed, update pyproject.toml too.
-  default_options : ['cpp_std=c++20',
+  version: '0.0.3', # if changed, update pyproject.toml too.
+  default_options: ['cpp_std=c++20',
                      'cpp_eh=none',
                      'cpp_rtti=false',
                      'warning_level=3',
                      'werror=true'])
 
-gtest_dep = dependency('gtest', main : true)
+gtest_dep = dependency('gtest', main: true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
 
@@ -42,7 +42,7 @@ bouncedesk_sources = [
 
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
-  dependencies : [gvnc_dep, vncserver_dep, sdl2_dep],
+  dependencies: [gvnc_dep, vncserver_dep, sdl2_dep],
 )
 
 reaper_sources = [
@@ -62,29 +62,29 @@ reaper = executable('reaper',
 
 client_test = executable('client_test',
   'client_test.cpp',
-  link_with : bouncedesk_lib,
-  dependencies : test_deps,
+  link_with: bouncedesk_lib,
+  dependencies: test_deps,
 )
 
 reaper_test = executable('reaper_test',
   ['reaper/reaper_test.cpp'] + reaper_sources,
-  link_with : bouncedesk_lib,
-  dependencies : test_deps,
+  link_with: bouncedesk_lib,
+  dependencies: test_deps,
 )
 
 ipc_test = executable('ipc_test',
   'reaper/ipc_test.cpp',
-  dependencies : test_deps,
+  dependencies: test_deps,
 )
 
 reaper_tests_reaper_parent = executable('reaper_tests_reaper_parent',
   'reaper/tests/reaper_parent.cpp',
-  link_with : bouncedesk_lib,
+  link_with: bouncedesk_lib,
 )
 
 display_vars_test = executable('display_vars_test',
   ['display_vars_test.cpp', 'display_vars.cpp'],
-  dependencies : test_deps,
+  dependencies: test_deps,
 )
 
 process_test = executable('process_test',
@@ -94,27 +94,29 @@ process_test = executable('process_test',
   'process/fd.cpp',
   'process/process_helpers.cpp',
   'process/stream.cpp'],
-  dependencies : test_deps,
+  dependencies: test_deps,
 )
 
 launch_weston_test = executable('launch_weston_test',
   ['launch_weston_test.cpp', 'launch_weston.cpp'],
-  link_with : bouncedesk_lib,
-  dependencies : test_deps,
+  link_with: bouncedesk_lib,
+  dependencies: test_deps,
 )
 
 export_display = executable('export_display',
-  ['export_display_main.cpp', 'display_vars.cpp']
+  ['export_display_main.cpp', 'display_vars.cpp'],
+  install_dir: 'bounce_desktop/bin',
+  install: true
 )
 
-integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with : bouncedesk_lib, dependencies: [gvnc_dep])
+integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with: bouncedesk_lib, dependencies: [gvnc_dep])
 
-test('client_test', client_test, workdir : meson.project_source_root())
-test('reaper_test', reaper_test, workdir : meson.project_source_root())
-test('ipc_test', ipc_test, workdir : meson.project_source_root())
-test('display_vars_test', display_vars_test, workdir : meson.project_source_root())
-test('process_test', process_test, workdir : meson.project_source_root())
-test('launch_weston_test', launch_weston_test, workdir : meson.project_source_root())
+test('client_test', client_test, workdir: meson.project_source_root())
+test('reaper_test', reaper_test, workdir: meson.project_source_root())
+test('ipc_test', ipc_test, workdir: meson.project_source_root())
+test('display_vars_test', display_vars_test, workdir: meson.project_source_root())
+test('process_test', process_test, workdir: meson.project_source_root())
+test('launch_weston_test', launch_weston_test, workdir: meson.project_source_root())
 
 # Python extension module
 subdir('bounce_desktop')

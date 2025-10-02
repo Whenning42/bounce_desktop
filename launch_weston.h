@@ -1,10 +1,12 @@
 #ifndef WESTON_H_
 #define WESTON_H_
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "process.h"
+#include "process/env_vars.h"
 #include "third_party/status/status_or.h"
 
 // Try running a Weston VNC backend display that runs the given
@@ -19,7 +21,8 @@
 // Returns:
 //  - UNAVAILABLE_ERROR if the chosen port is taken.
 //  - UNKNOWN_ERROR if weston fails with any non-port related error.
-StatusOr<Process> run_weston(int port, const std::vector<std::string>& command,
-                             int width = 800, int height = 600);
+StatusOr<Process> launch_weston(int port,
+                                const std::vector<std::string>& command,
+                                int width = 800, int height = 600);
 
 #endif

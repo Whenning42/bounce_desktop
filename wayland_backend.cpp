@@ -8,6 +8,7 @@
 
 #include "display_vars.h"
 #include "launch_weston.h"
+#include "weston_path.h"
 
 StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
     int32_t port_offset, int32_t width, int32_t height,
@@ -17,8 +18,8 @@ StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
   int port = port_offset;
   for (;; port++) {
     instance_name = std::format("vnc_{}", port);
-    StatusOr<Process> weston_or = run_weston(
-        port, {"./build/export_display", instance_name}, width, height);
+    StatusOr<Process> weston_or = launch_weston(
+        port, {get_export_display_path(), instance_name}, width, height);
     if (!weston_or.ok() &&
         weston_or.status().code() == StatusCode::UNAVAILABLE) {
       continue;
