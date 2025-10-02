@@ -9,22 +9,17 @@ project('bounce_desktop', 'cpp',
 gtest_dep = dependency('gtest', main : true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
-weston_proj = subproject('weston-fork', default_options: {
-  'werror': 'false',
-  'backend-vnc': 'true',
-  'renderer-gl': 'true',
-  'backend-headless': 'true',
-  'backend-default': 'headless',
-  'renderer-vulkan': 'false',
-  'backend-drm': 'false',
-  'backend-wayland': 'false',
-  'backend-x11': 'false',
-  'backend-rdp': 'false',
-  'remoting': 'false',
-  'pipewire': 'false',
-})
 
+# Commands to build using a local gvnc version with full debug symbols included.
+# gobj_dep = dependency('gobject-2.0')
+# cc = meson.get_compiler('cpp')  # or 'cpp'
+# gvnc_lib = cc.find_library('gvnc-1.0', dirs: ['/home/william/Workspaces/third_party/gtk-vnc/build/src'])
+# gvnc_inc = include_directories([
+#   '/usr/include/gvnc-1.0',
+# ])
+# gvnc_dep = declare_dependency(dependencies: [gvnc_lib, gobj_dep], include_directories: gvnc_inc)
 gvnc_dep = dependency('gvnc-1.0')
+
 # Note: Avoid non-test uses of libvncclient/libvncserver to avoid GPL issues.
 vncserver_dep = dependency('libvncserver', static: false)
 
@@ -122,30 +117,4 @@ test('process_test', process_test, workdir : meson.project_source_root())
 test('launch_weston_test', launch_weston_test, workdir : meson.project_source_root())
 
 # Python extension module
-python3 = import('python').find_installation('python3', required: false)
-nanobind_dep = dependency('nanobind')
-
-py_sources = [
-  'client_ext.cpp',
-  'third_party/status/exceptions.h',
-]
-
-python3.extension_module('bounce_desktop',
-  py_sources,
-  dependencies: [nanobind_dep, gvnc_dep],
-  link_with: bouncedesk_lib,
-  cpp_args: [],
-  override_options: [
-    'cpp_rtti=true',
-    'cpp_eh=default',
-    'warning_level=2',
-  ],
-  install_rpath: '$ORIGIN',
-)
-
-test('bounce_desk_test',
-  python3,
-  args: [files('bounce_desk_test.py')],
-  env: {'PYTHONPATH': meson.current_build_dir()},
-  workdir : meson.project_source_root()
-)
+subdir('bounce_desktop')
