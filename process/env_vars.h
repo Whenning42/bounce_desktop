@@ -3,24 +3,23 @@
 
 #include <stdio.h>
 
+#include <map>
+#include <string>
 #include <vector>
-
-inline void print_vars(char** vars) {
-  for (int i = 0;; ++i) {
-    char* v = vars[i];
-    if (!v) return;
-    printf("VAR: %s\n", v);
-  }
-}
 
 class EnvVars {
  public:
   // Copies the given env vars into a new EnvVars instance.
   EnvVars(char** env = nullptr);
-  ~EnvVars();
+  ~EnvVars() { clean_up_vars_arr(); }
 
   // Adds the given variable and value to env vars.
-  void set_var(const char* var, const char* val);
+  void set_var(const std::string& var, const std::string& val);
+
+  // Prepends the given value to the given variable.
+  // If the variable isn't already in env_vars, it's initialized to an empty
+  // string.
+  void prepend_var(const std::string& var, const std::string& val);
 
   // Returns a copy of the process's environment.
   static EnvVars environ();
@@ -28,8 +27,13 @@ class EnvVars {
   // Returns the env vars as a char**.
   char** vars();
 
- public:
-  std::vector<char*> vars_;
+  std::string to_string();
+
+ private:
+  void clean_up_vars_arr();
+
+  std::map<std::string, std::string> vars_;
+  char** vars_arr_ = nullptr;
 };
 
 #endif
