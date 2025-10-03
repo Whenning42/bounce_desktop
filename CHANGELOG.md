@@ -1,3 +1,7 @@
+0.1.4 - 2025-10-03
+
+- Add missing MIT license
+
 0.1.3 - 2025-10-03
 
 - Add python 3.10 support
