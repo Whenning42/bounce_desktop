@@ -27,7 +27,7 @@ WESTON_TMP := ${CURDIR}/build/temp_weston
 WESTON := ${CURDIR}/build/bounce_desktop/_vendored/weston
 build_weston:
 	cd subprojects/weston-fork; \
-	meson setup ${WESTON_BUILD_DIR} --reconfigure --buildtype=debug \
+	meson setup ${WESTON_BUILD_DIR} --reconfigure --buildtype=release \
 		--prefix=${WESTON_TMP} \
 		-Dwerror=false \
 		-Dbackend-vnc=true \
