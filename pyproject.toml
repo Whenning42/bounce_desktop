@@ -1,7 +1,7 @@
 [project]
 name = "bounce_desktop"
 version = "0.1.0" # if changed, update meson.build too.
-description = ""
+description = "Hardware-accelerated Linux virtual desktops."
 authors = [{name="William Henning", email="wchenningwchenning@gmail.com"}]
 license = "MIT"
 readme = "readme.md"
@@ -16,15 +16,10 @@ packages = [{include = "bounce_desktop"}]
 include = [
     "meson.build",
     "makefile",
-    "*.cpp",
-    "*.h",
-    "*.py",
-    "reaper/**/*.cpp",
-    "reaper/**/*.h",
-    "reaper/**/*.tpp",
-    "reaper/**/*.py",
-    "process/**/*.cpp",
-    "process/**/*.h",
+    "src/**/*.cpp",
+    "src/**/*.h",
+    "src/**/*.tpp",
+    "src/**/*.py",
     "third_party/**/*.h",
     "third_party/**/*.cpp",
     "subprojects/**/*",

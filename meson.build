@@ -17,90 +17,100 @@ vncserver_dep = dependency('libvncserver', static: false)
 test_deps = [gtest_dep, gmock_dep, gvnc_dep]
 
 bouncedesk_sources = [
-  'client.cpp',
-  'wayland_backend.cpp',
-  'reaper/reaper.cpp',
-  'process.cpp',
-  'display_vars.cpp',
-  'launch_weston.cpp',
-  'mock_vnc_server.cpp',
-  'sdl_viewer.cpp',
-  'process/env_vars.cpp',
-  'process/fd.cpp',
-  'process/process_helpers.cpp',
-  'process/stream.cpp'
+  'src/desktop/client.cpp',
+  'src/desktop/weston_backend.cpp',
+  'src/reaper/reaper.cpp',
+  'src/process/process.cpp',
+  'src/weston/display_vars.cpp',
+  'src/weston/launch_weston.cpp',
+  'src/vnc_test/mock_vnc_server.cpp',
+  'src/desktop/sdl_viewer.cpp',
+  'src/process/env_vars.cpp',
+  'src/process/fd.cpp',
+  'src/process/process_helpers.cpp',
+  'src/process/stream.cpp'
 ]
 
 bouncedesk_lib = static_library('bouncedesk',
   bouncedesk_sources,
+  include_directories: include_directories('src'),
   dependencies: [gvnc_dep, vncserver_dep, sdl2_dep],
 )
 
 reaper_sources = [
-  'reaper/reaper.cpp',
-  'reaper/impl.cpp',
-  'reaper/cleanup.cpp',
-  'process.cpp',
-  'process/env_vars.cpp',
-  'process/fd.cpp',
-  'process/process_helpers.cpp',
-  'process/stream.cpp'
+  'src/reaper/reaper.cpp',
+  'src/reaper/impl.cpp',
+  'src/reaper/cleanup.cpp',
+  'src/process/process.cpp',
+  'src/process/env_vars.cpp',
+  'src/process/fd.cpp',
+  'src/process/process_helpers.cpp',
+  'src/process/stream.cpp'
 ]
 
 reaper = executable('reaper',
-  ['reaper/impl_main.cpp'] + reaper_sources,
+  ['src/reaper/impl_main.cpp'] + reaper_sources,
+  include_directories: include_directories('src'),
 )
 
 client_test = executable('client_test',
-  'client_test.cpp',
+  'src/desktop/client_test.cpp',
+  include_directories: include_directories('src'),
   link_with: bouncedesk_lib,
   dependencies: test_deps,
 )
 
 reaper_test = executable('reaper_test',
-  ['reaper/reaper_test.cpp'] + reaper_sources,
+  ['src/reaper/reaper_test.cpp'] + reaper_sources,
+  include_directories: include_directories('src'),
   link_with: bouncedesk_lib,
   dependencies: test_deps,
 )
 
 ipc_test = executable('ipc_test',
-  'reaper/ipc_test.cpp',
+  'src/reaper/ipc_test.cpp',
+  include_directories: include_directories('src'),
   dependencies: test_deps,
 )
 
 reaper_tests_reaper_parent = executable('reaper_tests_reaper_parent',
-  'reaper/tests/reaper_parent.cpp',
+  'src/reaper/tests/reaper_parent.cpp',
+  include_directories: include_directories('src'),
   link_with: bouncedesk_lib,
 )
 
 display_vars_test = executable('display_vars_test',
-  ['display_vars_test.cpp', 'display_vars.cpp'],
+  ['src/weston/display_vars_test.cpp', 'src/weston/display_vars.cpp'],
+  include_directories: include_directories('src'),
   dependencies: test_deps,
 )
 
 process_test = executable('process_test',
-  ['process_test.cpp',
-  'process.cpp',
-  'process/env_vars.cpp',
-  'process/fd.cpp',
-  'process/process_helpers.cpp',
-  'process/stream.cpp'],
+  ['src/process/process_test.cpp',
+  'src/process/process.cpp',
+  'src/process/env_vars.cpp',
+  'src/process/fd.cpp',
+  'src/process/process_helpers.cpp',
+  'src/process/stream.cpp'],
+  include_directories: include_directories('src'),
   dependencies: test_deps,
 )
 
 launch_weston_test = executable('launch_weston_test',
-  ['launch_weston_test.cpp', 'launch_weston.cpp'],
+  ['src/weston/launch_weston_test.cpp', 'src/weston/launch_weston.cpp'],
+  include_directories: include_directories('src'),
   link_with: bouncedesk_lib,
   dependencies: test_deps,
 )
 
 export_display = executable('export_display',
-  ['export_display_main.cpp', 'display_vars.cpp'],
+  ['src/weston/export_display_main.cpp', 'src/weston/display_vars.cpp'],
+  include_directories: include_directories('src'),
   install_dir: 'bounce_desktop/bin',
   install: true
 )
 
-integration_test = executable('integration_test', ['integration_test_main.cpp'], link_with: bouncedesk_lib, dependencies: [gvnc_dep])
+integration_test = executable('integration_test', ['src/test/integration_test_main.cpp'], include_directories: include_directories('src'), link_with: bouncedesk_lib, dependencies: [gvnc_dep])
 
 test('client_test', client_test, workdir: meson.project_source_root())
 test('reaper_test', reaper_test, workdir: meson.project_source_root())

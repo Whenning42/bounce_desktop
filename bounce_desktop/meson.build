@@ -5,13 +5,13 @@ python3 = import('python').find_installation('python3', required: false)
 nanobind_dep = dependency('nanobind')
 
 py_sources = [
-  '../client_ext.cpp',
+  '../src/bindings/client_ext.cpp',
   '../third_party/status/exceptions.h',
 ]
 
 python3.extension_module('_core',
   py_sources,
-  include_directories: ['../'],
+  include_directories: ['../', '../src'],
   dependencies: [nanobind_dep, gvnc_dep],
   link_with: bouncedesk_lib,
   cpp_args: [],
