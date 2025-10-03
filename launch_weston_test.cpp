@@ -5,8 +5,8 @@
 
 #include <thread>
 
+#include "paths.h"
 #include "third_party/status/status_gtest.h"
-#include "weston_path.h"
 
 void close_proc(int pid) {
   kill(pid, SIGTERM);

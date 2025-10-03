@@ -1,5 +1,5 @@
-#ifndef WESTON_PATH_
-#define WESTON_PATH_
+#ifndef PATHS_
+#define PATHS_
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -32,25 +32,8 @@ inline std::string get_export_display_path() {
   return get_package_path() + "/bin/export_display";
 }
 
-inline std::string get_weston_prefix() {
-  return get_package_path() + "/_vendored/weston";
-}
-
 inline std::string get_weston_bin() {
-  return get_weston_prefix() + "/bin/weston";
-}
-
-inline std::string get_weston_path() {
-  return get_weston_prefix() + "/libexec";
-}
-
-inline std::string get_weston_lib_path() {
-  return get_weston_prefix() + "/lib/libweston-15" + ":" + get_weston_prefix() +
-         "/lib/weston";
-}
-
-inline std::string get_weston_data_dir() {
-  return get_weston_prefix() + "/share/weston";
+  return get_package_path() + "/_vendored/weston/bin/weston";
 }
 
 #endif

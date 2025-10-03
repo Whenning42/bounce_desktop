@@ -8,7 +8,7 @@
 
 #include "display_vars.h"
 #include "launch_weston.h"
-#include "weston_path.h"
+#include "paths.h"
 
 StatusOr<std::unique_ptr<WaylandBackend>> WaylandBackend::start_server(
     int32_t port_offset, int32_t width, int32_t height,

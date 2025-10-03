@@ -7,9 +7,9 @@
 #include <sstream>
 #include <thread>
 
+#include "paths.h"
 #include "process.h"
 #include "time_aliases.h"
-#include "weston_path.h"
 
 namespace {
 void set_fd_nonblocking(int fd) {
@@ -84,11 +84,6 @@ StatusVal search_for_error(const std::string& out) {
 StatusOr<Process> launch_weston(int port,
                                 const std::vector<std::string>& command,
                                 int width, int height) {
-  EnvVars env = EnvVars::environ();
-  env.prepend_var("LD_LIBRARY_PATH", get_weston_lib_path() + ":");
-  env.prepend_var("PATH", get_weston_path() + ":");
-  env.set_var("WESTON_DATA_DIR", get_weston_data_dir());
-
   std::vector<std::string> weston_command = {
       get_weston_bin(),
       "--xwayland",
@@ -105,8 +100,8 @@ StatusOr<Process> launch_weston(int port,
       .stdout = StreamOutConf::Pipe(),
       .stderr = StreamOutConf::StdoutPipe(),
   };
-  ASSIGN_OR_RETURN(
-      Process p, launch_process(weston_command, &env, std::move(stream_conf)));
+  ASSIGN_OR_RETURN(Process p, launch_process(weston_command, nullptr,
+                                             std::move(stream_conf)));
   LOG(kLogVnc, "Launched weston as process: %d", p.pid);
   auto start = sc_now();
   std::string output;
