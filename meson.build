@@ -1,5 +1,5 @@
 project('bounce_desktop', 'cpp',
-  version: '0.0.3', # if changed, update pyproject.toml too.
+  version: '0.1.0', # if changed, update pyproject.toml too.
   default_options: ['cpp_std=c++20',
                      'cpp_eh=none',
                      'cpp_rtti=false',
@@ -9,15 +9,6 @@ project('bounce_desktop', 'cpp',
 gtest_dep = dependency('gtest', main: true)
 gmock_dep = dependency('gmock')
 sdl2_dep = dependency('sdl2')
-
-# Commands to build using a local gvnc version with full debug symbols included.
-# gobj_dep = dependency('gobject-2.0')
-# cc = meson.get_compiler('cpp')  # or 'cpp'
-# gvnc_lib = cc.find_library('gvnc-1.0', dirs: ['/home/william/Workspaces/third_party/gtk-vnc/build/src'])
-# gvnc_inc = include_directories([
-#   '/usr/include/gvnc-1.0',
-# ])
-# gvnc_dep = declare_dependency(dependencies: [gvnc_lib, gobj_dep], include_directories: gvnc_inc)
 gvnc_dep = dependency('gvnc-1.0')
 
 # Note: Avoid non-test uses of libvncclient/libvncserver to avoid GPL issues.
