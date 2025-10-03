@@ -1,11 +1,11 @@
 [project]
 name = "bounce_desktop"
-version = "0.1.2" # if changed, update meson.build too.
+version = "0.1.3" # if changed, update meson.build too.
 description = "Hardware-accelerated Linux virtual desktops."
 authors = [{name="William Henning", email="wchenningwchenning@gmail.com"}]
 license = "MIT"
 readme = "readme.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "meson>=1.0.0", "ninja"]
@@ -35,4 +35,4 @@ script = "build-extension.py"
 generate-setup-file = false
 
 [tool.poetry.dependencies]
-numpy = "^2.3.3"
+numpy = "^2.2.0"
