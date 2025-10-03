@@ -1,6 +1,6 @@
 [project]
 name = "bounce_desktop"
-version = "0.1.4" # if changed, update meson.build too.
+version = "0.1.5" # if changed, update meson.build too.
 description = "Hardware-accelerated Linux virtual desktops."
 authors = [{name="William Henning", email="wchenningwchenning@gmail.com"}]
 license = "MIT"

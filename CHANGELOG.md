@@ -1,3 +1,7 @@
+0.1.5 - 2025-10-03
+
+- Fix incorrect string nesting in build_extension.py
+
 0.1.4 - 2025-10-03
 
 - Add missing MIT license

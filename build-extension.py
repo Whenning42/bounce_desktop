@@ -15,9 +15,9 @@ def echo(s):
 def run_command(*args, **kwargs):
     # Use echo instead of print for printing actions, since python and subprocess stdout
     # don't seem to be correctly merged by pip's verbose mode.
-    echo(f"Calling: {" ".join(*args)} ===============")
+    echo(f"Calling: {' '.join(*args)} ===============")
     subprocess.call(*args, **kwargs)
-    echo(f"End call: {" ".join(*args)} ===============")
+    echo(f"End call: {' '.join(*args)} ===============")
 
 
 def build():
