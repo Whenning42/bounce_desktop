@@ -1,10 +1,21 @@
-# A makefile for building bounce_desktop along with its vendored version of weston.
+# A makefile for building bounce_desktop library, python package, and vendored weston.
 #
-# We use a makefile for all of our builds, since we use a particular set up for builds
-# and installs that meson doesn't support well out of the box. Specifically, to unify
-# our project layout between builds and installs, we only support running the project
-# post-meson-install. We don't support post-builds at all and using a makefile for
-# all builds makes this clearer / less error-prone.
+# Commands:
+#   make build: Builds the whole project and installs it under build/
+#   make build_weston: Builds vendored weston and installs it under build/
+#   make test: Runs the project's unit tests
+#   make package: Builds the project's python package and stores it under dist/
+#   make package_test: Runs the project's unit tests and builds and verifies the
+#                      python package.
+#   make upload: Run the project's unit and packaging tests and then uploads
+#                the package to pypi.
+#
+#
+# Note: We use a makefile for all of our builds, since:
+# 1. We only support running this project in a locally installed configuration, so
+#    we don't want users running "meson compile ..."
+# 2. It gives us a convenient place to unify and document the build, package, test,
+#    and upload commands our project uses.
 
 BUILD_DIR := ${CURDIR}/build
 build: build_weston
@@ -39,5 +50,15 @@ build_weston:
 	cp -R -L ${WESTON_TMP}/. ${WESTON}
 	rm -rf ${WESTON_TMP}
 
+package: build
+	./packaging/build_package.sh
+
 test: build
 	meson test -C build/
+
+package_test: test
+	./packaging/test_package.sh
+
+upload: test
+	./packaging/test_package.sh --save_package
+	twine upload dist/*
