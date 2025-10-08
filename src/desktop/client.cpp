@@ -3,6 +3,7 @@
 #include <gvnc-1.0/gvnc.h>
 #include <string.h>
 
+#include <atomic>
 #include <cassert>
 #include <future>
 #include <thread>
@@ -13,6 +14,7 @@
 
 const char* kPtrKey = "inst";
 const uint32_t kUnusedScancode = 0;
+std::atomic<int> num_open = 0;
 
 namespace {
 VncPixelFormat* local_format() {
@@ -85,13 +87,20 @@ void on_error(VncConnection* c, const char* msg, void* data) {
 }  // namespace
 
 StatusOr<std::unique_ptr<BounceDeskClient>> BounceDeskClient::connect(
-    int32_t port) {
+    int32_t port, bool allow_unsafe) {
   auto client = std::unique_ptr<BounceDeskClient>(new BounceDeskClient());
-  RETURN_IF_ERROR(client->connect_impl(port));
+  RETURN_IF_ERROR(client->connect_impl(port, allow_unsafe));
   return client;
 }
 
-StatusVal BounceDeskClient::connect_impl(int32_t port) {
+StatusVal BounceDeskClient::connect_impl(int32_t port, bool allow_unsafe) {
+  int last_open = num_open.fetch_add(1);
+  if (last_open > 0 && !allow_unsafe) {
+    return InternalError(
+        "BounceDeskClient requires passing 'true' for 'allow_unsafe' if you "
+        "want to test running multiple instances in a process.");
+  }
+
   port_ = port;
   vnc_loop_ = std::thread(&BounceDeskClient::vnc_loop, this);
 
@@ -103,6 +112,7 @@ StatusVal BounceDeskClient::connect_impl(int32_t port) {
     sleep_for(50us);
   }
   if (!initialized_) {
+    exited_ = true;
     return InternalError(
         "Failed to initialize vnc client connection to server.");
   }
@@ -112,8 +122,11 @@ StatusVal BounceDeskClient::connect_impl(int32_t port) {
 
 BounceDeskClient::~BounceDeskClient() {
   exit_ = true;
-  vnc_connection_shutdown(c_);
+  if (c_) {
+    vnc_connection_shutdown(c_);
+  }
   g_main_context_wakeup(NULL);
+  num_open -= 1;
 
   while (!exited_) {
     printf("Waiting for exited signal\n");

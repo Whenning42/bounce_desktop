@@ -27,6 +27,13 @@ I don't have docs or clear examples handy, but for starter pointers, see:
 [bounce_desktop/bounce_desk_test.py](bounce_desktop/bounce_desk_test.py), and
 [src/bindings/client_exe.h](src/bindings/client_ext.h).
 
+# Limitations
+
+Running multiple desktops from a single process isn't supported yet. I'd like to support
+this use case, but there are some threading details to work through in the libgvnc
+client and SDL viewer. Until then, if you do want to test the threaded set up,
+pass in "true" to the the "allow_unsafe" arg for the client or viewer.
+
 # Roadmap 
 
 This project's being developed to support [BounceRL](https://github.com/Whenning42/bounce-rl),

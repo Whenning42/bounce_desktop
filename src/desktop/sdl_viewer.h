@@ -2,6 +2,7 @@
 #define DESKTOP_SDL_VIEWER_H_
 
 #include <memory>
+#include <string>
 #include <thread>
 
 #include "desktop/client.h"
@@ -19,7 +20,8 @@ class SDLViewer {
 
   // Create a viewer by calling open().
   static StatusOr<std::unique_ptr<SDLViewer>> open(
-      std::shared_ptr<BounceDeskClient> client);
+      std::shared_ptr<BounceDeskClient> client,
+      std::string window_name = "Bounce Viewer", bool allow_unsafe = false);
 
   // Closes the viewer if it's still open.
   ~SDLViewer();
@@ -33,6 +35,8 @@ class SDLViewer {
 
  private:
   SDLViewer() = default;
+
+  std::string window_name_;
 
   std::atomic<bool> exit_loop_ = false;
   std::atomic<bool> was_closed_ = false;

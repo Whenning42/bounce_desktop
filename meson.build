@@ -111,6 +111,7 @@ export_display = executable('export_display',
 )
 
 integration_test = executable('integration_test', ['src/test/integration_test_main.cpp'], include_directories: include_directories('src'), link_with: bouncedesk_lib, dependencies: [gvnc_dep])
+multi_instance_integration_test = executable('multi_instance_integration_test', ['src/test/multi_instance_integration_test_main.cpp'], include_directories: include_directories('src'), link_with: bouncedesk_lib, dependencies: [gvnc_dep])
 
 test('client_test', client_test, workdir: meson.project_source_root())
 test('reaper_test', reaper_test, workdir: meson.project_source_root())

@@ -3,14 +3,32 @@
 #include <SDL.h>
 #include <stdio.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <mutex>
 #include <vector>
 
+namespace {
+// SDL_init correctly reference counts SDL subsystem init and quit calls, but it
+// apparently requires caller synchronization to do so (as of 2025-10-07).
+std::mutex sdl_init_mu;
+std::atomic<int> num_open = 0;
+}  // namespace
+
 StatusOr<std::unique_ptr<SDLViewer>> SDLViewer::open(
-    std::shared_ptr<BounceDeskClient> client) {
+    std::shared_ptr<BounceDeskClient> client, std::string window_name,
+    bool allow_unsafe) {
+  int last_open = num_open.fetch_add(1);
+  if (last_open > 0 && !allow_unsafe) {
+    return InternalError(
+        "Opening multiple SDLViewers is unsupported without setting "
+        "'allow_unsafe' to true.");
+  }
+
   std::unique_ptr<SDLViewer> viewer =
       std::unique_ptr<SDLViewer>(new SDLViewer());
+  viewer->window_name_ = window_name;
   viewer->client_ = client;
   viewer->app_loop_ = std::thread(&SDLViewer::app_loop, viewer.get());
   return viewer;
@@ -43,6 +61,7 @@ void SDLViewer::app_loop() {
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     SDL_Quit();
+    exit(1);
   };
   auto check_ptr = [&](void* p, std::string msg) {
     if (p == 0) on_error(msg);
@@ -51,10 +70,13 @@ void SDLViewer::app_loop() {
     if (v != 0) on_error(msg);
   };
 
-  check_val(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER), "SDL_Init");
+  {
+    std::lock_guard l(sdl_init_mu);
+    check_val(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER), "SDL_Init");
+  }
 
   int w = 1, h = 1;
-  window = SDL_CreateWindow("Bounce Viewer", SDL_WINDOWPOS_CENTERED,
+  window = SDL_CreateWindow(window_name_.c_str(), SDL_WINDOWPOS_CENTERED,
                             SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_SHOWN);
   check_ptr(window, "SDL_CreateWindow");
   renderer = SDL_CreateRenderer(
@@ -101,5 +123,6 @@ void SDLViewer::app_loop() {
   if (renderer) SDL_DestroyRenderer(renderer);
   if (window) SDL_DestroyWindow(window);
   SDL_Quit();
+  num_open -= 1;
   was_closed_ = true;
 }

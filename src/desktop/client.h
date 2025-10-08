@@ -16,7 +16,8 @@
 
 class BounceDeskClient {
  public:
-  static StatusOr<std::unique_ptr<BounceDeskClient>> connect(int32_t port);
+  static StatusOr<std::unique_ptr<BounceDeskClient>> connect(
+      int32_t port, bool allow_unsafe = false);
   ~BounceDeskClient();
 
   // Delete copy and move operators, since we rely on pointer stability when
@@ -51,7 +52,7 @@ class BounceDeskClient {
   std::atomic<bool> initialized_ = false;
 
  protected:
-  StatusVal connect_impl(int32_t port);
+  StatusVal connect_impl(int32_t port, bool allow_unsafe = false);
   BounceDeskClient() = default;
 
  private:
