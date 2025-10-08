@@ -1,3 +1,8 @@
+0.1.6 - 2025-10-07
+
+- Document multi-instance limitations and add asserts preventing
+  accidental multi-instance use.
+
 0.1.5 - 2025-10-03
 
 - Fix incorrect string nesting in build_extension.py
