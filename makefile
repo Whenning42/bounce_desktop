@@ -23,12 +23,13 @@ build: build_weston
 	meson install -C build/
 
 WESTON_BUILD_DIR := ${CURDIR}/build/weston-fork
-WESTON_TMP := ${CURDIR}/build/temp_weston
 WESTON := ${CURDIR}/build/bounce_desktop/_vendored/weston
 build_weston:
+	mkdir -p ${WESTON}
+
 	cd subprojects/weston-fork; \
 	meson setup ${WESTON_BUILD_DIR} --reconfigure --buildtype=release \
-		--prefix=${WESTON_TMP} \
+		--prefix=${WESTON} \
 		-Dwerror=false \
 		-Dbackend-vnc=true \
 		-Drenderer-gl=true \
@@ -41,20 +42,15 @@ build_weston:
 		-Dbackend-rdp=false \
 		-Dremoting=false \
 		-Dpipewire=false
+
 	meson compile -C ${WESTON_BUILD_DIR}
 	meson install -C ${WESTON_BUILD_DIR}
-	mkdir -p ${WESTON}
-# We build in a tempory directory and then copy over to our real target directory
-# with a "cp -R -L" so that we can convet symlinked .so's to copies of the .so's,
-# since python doesn't support symlinks in sdists.
-	cp -R -L ${WESTON_TMP}/. ${WESTON}
-	rm -rf ${WESTON_TMP}
 
 package: build
 	./packaging/build_package.sh
 
 test: build
-	meson test -C build/
+	meson test -C build/ --print-errorlogs --max-lines 2000
 
 package_test: test
 	./packaging/test_package.sh
